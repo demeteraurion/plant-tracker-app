@@ -61,18 +61,22 @@ const getAllPlants = async () => {
 
 const savePlantToDB = async (plant) => {
   const db = await initDB();
-  const transaction = db.transaction(STORE_NAME, 'readwrite');
-  const store = transaction.objectStore(STORE_NAME);
-  store.put(plant);
-  return transaction.complete;
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(STORE_NAME, 'readwrite');
+    transaction.oncomplete = () => resolve(true);
+    transaction.onerror = () => reject(transaction.error);
+    transaction.objectStore(STORE_NAME).put(plant);
+  });
 };
 
 const deletePlantFromDB = async (id) => {
   const db = await initDB();
-  const transaction = db.transaction(STORE_NAME, 'readwrite');
-  const store = transaction.objectStore(STORE_NAME);
-  store.delete(id);
-  return transaction.complete;
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(STORE_NAME, 'readwrite');
+    transaction.oncomplete = () => resolve(true);
+    transaction.onerror = () => reject(transaction.error);
+    transaction.objectStore(STORE_NAME).delete(id);
+  });
 };
 
 // --- Constants ---
@@ -115,10 +119,14 @@ export default function App() {
   const [view, setView] = useState('dashboard');
   const [selectedPlantId, setSelectedPlantId] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const searchBoxRef = useRef(null);
+
   const [filter, setFilter] = useState('all');
   const [isLoading, setIsLoading] = useState(true);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(() => {
     return localStorage.getItem('plantTrackerTheme') === 'dark';
   });
@@ -151,6 +159,48 @@ export default function App() {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
+  useEffect(() => {
+    const onMouseDown = (e) => {
+      if (!searchBoxRef.current) return;
+      if (!searchBoxRef.current.contains(e.target)) {
+        setIsSearchOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', onMouseDown);
+    return () => document.removeEventListener('mousedown', onMouseDown);
+  }, []);
+
+
+  const searchResults = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return [];
+    return plants
+      .filter((p) => {
+        const name = (p.name || '').toLowerCase();
+        const species = (p.species || '').toLowerCase();
+        return name.includes(q) || species.includes(q);
+      })
+      .slice(0, 8);
+  }, [plants, searchQuery]);
+
+  useEffect(() => {
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape') setIsSearchOpen(false);
+      if (e.key === 'Enter') {
+        const q = searchQuery.trim();
+        if (q && searchResults.length === 1) {
+          const only = searchResults[0];
+          setSelectedPlantId(only.id);
+          setView('detail');
+          setSearchQuery('');
+          setIsSearchOpen(false);
+        }
+      }
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [searchQuery, searchResults]);
+
   const addPlant = async (newPlant) => {
     const plant = { ...newPlant, id: Date.now().toString(), createdAt: new Date() };
     await savePlantToDB(plant);
@@ -159,15 +209,12 @@ export default function App() {
   };
 
   const updatePlant = async (id, updates) => {
-    const updatedPlants = plants.map(p => {
-      if (p.id === id) {
-        const newPlant = { ...p, ...updates };
-        savePlantToDB(newPlant);
-        return newPlant;
-      }
-      return p;
-    });
-    setPlants(updatedPlants);
+    const existing = plants.find(p => p.id === id);
+    if (!existing) return;
+
+    const newPlant = { ...existing, ...updates };
+    await savePlantToDB(newPlant);
+    setPlants(plants.map(p => (p.id === id ? newPlant : p)));
   };
 
   const deletePlant = async (id) => {
@@ -206,13 +253,18 @@ export default function App() {
   };
 
   const filteredPlants = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
     return plants.filter(p => {
-      const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                            p.species?.toLowerCase().includes(searchQuery.toLowerCase());
+      const nameMatch = (p.name || '').toLowerCase().includes(q);
+      const speciesMatch = (p.species || '').toLowerCase().includes(q);
+      const matchesSearch = !q || nameMatch || speciesMatch;
+
       if (filter === 'all') return matchesSearch;
       return matchesSearch && getStatus(calculateNextDue(p.lastWatered, p.frequency)) === filter;
     });
   }, [plants, searchQuery, filter]);
+
+
 
   const selectedPlant = plants.find(p => p.id === selectedPlantId);
 
@@ -279,15 +331,52 @@ export default function App() {
               <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="lg:hidden p-3 bg-white dark:bg-[#232B26] shadow-sm rounded-2xl dark:text-white transition-colors">
                 <Menu size={20} />
               </button>
-              <div className="relative w-full max-w-xl group">
+              <div ref={searchBoxRef} className="relative w-full max-w-xl group">
                 <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-[#D9E3D8] dark:text-[#415147] group-focus-within:text-[#A7C080] transition-colors" size={20} />
                 <input 
                   type="text" 
                   placeholder="Find a friend by name..." 
                   className="w-full pl-14 pr-8 py-4 bg-white dark:bg-[#1A211D] border-2 border-transparent focus:border-[#A7C080]/30 dark:focus:border-[#A7C080]/20 rounded-[40px] shadow-[0_4px_15px_rgba(0,0,0,0.02)] dark:shadow-none outline-none text-sm transition-all placeholder-[#D9E3D8] dark:placeholder-[#415147] dark:text-white"
                   value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onFocus={() => setIsSearchOpen(true)}
+                  onChange={(e) => { setSearchQuery(e.target.value); setIsSearchOpen(true); }}
                 />
+
+                {isSearchOpen && searchQuery.trim() && (
+                  <div className="absolute left-0 right-0 mt-3 bg-white dark:bg-[#232B26] border-2 border-[#F2E8D5] dark:border-[#2A332E] rounded-[28px] overflow-hidden shadow-2xl z-50">
+                    {searchResults.length ? (
+                      <>
+                        {searchResults.map((p) => (
+                          <button
+                            key={p.id}
+                            type="button"
+                            className="w-full text-left px-6 py-4 hover:bg-[#EAF2ED] dark:hover:bg-[#A7C080]/10 transition-colors"
+                            onClick={() => {
+                              setSelectedPlantId(p.id);
+                              setView('detail');
+                              setSearchQuery('');
+                              setIsSearchOpen(false);
+                            }}
+                          >
+                            <div className="font-black text-sm text-[#5C4D42] dark:text-white truncate">
+                              {p.name || 'Unnamed plant'}
+                            </div>
+                            <div className="text-[11px] font-bold uppercase tracking-widest text-[#A8BDB4] dark:text-[#5B6D65] truncate mt-1">
+                              {p.species || "Nature's Gem"}
+                            </div>
+                          </button>
+                        ))}
+                        <div className="px-6 py-3 text-[10px] font-black uppercase tracking-[0.25em] text-[#D9E3D8] dark:text-[#415147] border-t border-[#F2E8D5] dark:border-[#2A332E]">
+                          Tip: press Enter if there’s only one match
+                        </div>
+                      </>
+                    ) : (
+                      <div className="px-6 py-5 text-sm font-bold text-[#A8BDB4] dark:text-[#5B6D65]">
+                        No matches
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
             
@@ -308,13 +397,20 @@ export default function App() {
           </header>
 
           <div className="flex-1 overflow-y-auto p-8 lg:p-12 custom-scrollbar">
-            {view === 'dashboard' && <DashboardView plants={plants} onPlantClick={(id) => { setSelectedPlantId(id); setView('detail'); }} onWater={markWatered} />}
+            {view === 'dashboard' && <DashboardView plants={filteredPlants} onPlantClick={(id) => { setSelectedPlantId(id); setView('detail'); }} onWater={markWatered} />}
             {view === 'list' && <ListView plants={filteredPlants} filter={filter} setFilter={setFilter} onPlantClick={(id) => { setSelectedPlantId(id); setView('detail'); }} onWater={markWatered} />}
-            {view === 'detail' && selectedPlant && <DetailView plant={selectedPlant} onBack={() => setView('dashboard')} onWater={markWatered} onDelete={deletePlant} />}
+            {view === 'detail' && selectedPlant && <DetailView plant={selectedPlant} onBack={() => setView('dashboard')} onWater={markWatered} onDelete={deletePlant} onEdit={() => setIsEditModalOpen(true)} />}
           </div>
         </main>
 
         {isModalOpen && <AddPlantModal onClose={() => setIsModalOpen(false)} onSubmit={addPlant} />}
+        {isEditModalOpen && selectedPlant && (
+          <EditPlantModal
+            plant={selectedPlant}
+            onClose={() => setIsEditModalOpen(false)}
+            onSubmit={(updates) => updatePlant(selectedPlant.id, updates)}
+          />
+        )}
       </div>
     </div>
   );
@@ -417,7 +513,7 @@ function ListView({ plants, filter, setFilter, onPlantClick, onWater }) {
   );
 }
 
-function DetailView({ plant, onBack, onWater, onDelete }) {
+function DetailView({ plant, onBack, onWater, onDelete, onEdit }) {
   const nextDue = calculateNextDue(plant.lastWatered, plant.frequency);
   const status = getStatus(nextDue);
 
@@ -451,9 +547,19 @@ function DetailView({ plant, onBack, onWater, onDelete }) {
                   <span className="text-sm font-black tracking-widest uppercase">{plant.species || 'Nature\'s Gem'}</span>
                 </div>
               </div>
-              <button onClick={() => onDelete(plant.id)} className="p-5 text-[#F2C6C2] dark:text-[#B17F7A] hover:text-[#D98E82] hover:bg-[#FFF4F2] dark:hover:bg-[#B17F7A]/10 rounded-[30px] transition-all">
-                <Trash2 size={28} />
-              </button>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={onEdit}
+                  className="p-5 text-[#A7C080] hover:text-[#8FA66A] hover:bg-[#EAF2ED] dark:hover:bg-[#A7C080]/10 rounded-[30px] transition-all"
+                  title="Edit"
+                >
+                  <span className="sr-only">Edit</span>
+                  <Sparkles size={28} />
+                </button>
+                <button onClick={() => onDelete(plant.id)} className="p-5 text-[#F2C6C2] dark:text-[#B17F7A] hover:text-[#D98E82] hover:bg-[#FFF4F2] dark:hover:bg-[#B17F7A]/10 rounded-[30px] transition-all">
+                  <Trash2 size={28} />
+                </button>
+              </div>
             </div>
 
             <div className="grid grid-cols-2 gap-8">
@@ -640,6 +746,110 @@ function AddPlantModal({ onClose, onSubmit }) {
 
           <button type="submit" className="w-full py-8 bg-[#A7C080] text-white rounded-[40px] font-black text-2xl shadow-[0_20px_40px_rgba(167,192,128,0.3)] dark:shadow-none hover:bg-[#96AD73] transition-all active:scale-95 mt-6 border-b-8 border-[#8FA66A] dark:border-transparent">
             WELCOME TO THE FAMILY
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function EditPlantModal({ plant, onClose, onSubmit }) {
+  const [name, setName] = useState(plant?.name || '');
+  const [species, setSpecies] = useState(plant?.species || '');
+  const [frequency, setFrequency] = useState(plant?.frequency ?? 7);
+  const [lastWatered, setLastWatered] = useState(() => {
+    const iso = plant?.lastWatered ? new Date(plant.lastWatered).toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
+    return iso;
+  });
+  const [photo, setPhoto] = useState(plant?.photo || null);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const fileInputRef = useRef(null);
+
+  const filteredSuggestions = useMemo(() => {
+    if (!species || species.length < 2) return [];
+    return POPULAR_PLANTS.filter(p => p.toLowerCase().includes(species.toLowerCase())).slice(0, 5);
+  }, [species]);
+
+  const handlePhoto = (e) => {
+    const reader = new FileReader();
+    reader.onload = () => setPhoto(reader.result);
+    if (e.target.files[0]) reader.readAsDataURL(e.target.files[0]);
+  };
+
+  return (
+    <div className="fixed inset-0 z-[110] flex items-center justify-center p-6 bg-[#151A17]/70 backdrop-blur-xl animate-in fade-in duration-500">
+      <div className="bg-white dark:bg-[#232B26] w-full max-w-2xl rounded-[60px] shadow-3xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-500 max-h-[95vh] border-8 border-white dark:border-[#232B26]">
+        <div className="p-10 pb-0 flex justify-between items-center">
+          <div className="flex items-center gap-4">
+            <div className="w-10 h-10 bg-[#A7C080] rounded-full flex items-center justify-center text-white"><Sparkles size={20} /></div>
+            <h2 className="text-4xl font-serif font-black text-[#5C4D42] dark:text-white">Edit Plant</h2>
+          </div>
+          <button onClick={onClose} className="p-3 hover:bg-[#FFF9F2] dark:hover:bg-[#1A211D] rounded-full transition-colors dark:text-white"><X size={28}/></button>
+        </div>
+
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            onSubmit({
+              name,
+              species,
+              frequency,
+              lastWatered: new Date(lastWatered).toISOString(),
+              photo
+            });
+            onClose();
+          }}
+          className="p-10 space-y-10 overflow-y-auto custom-scrollbar"
+        >
+          <div className="flex flex-col md:flex-row gap-10">
+            <div
+              onClick={() => fileInputRef.current?.click()}
+              className="w-full md:w-60 h-60 bg-[#FFF9F2] dark:bg-[#1A211D] border-4 border-dashed border-[#F2E8D5] dark:border-[#2A332E] rounded-[48px] flex items-center justify-center cursor-pointer hover:border-[#A7C080] transition-all shrink-0 overflow-hidden relative shadow-inner"
+            >
+              {photo ? (
+                <img src={photo} alt="" className="w-full h-full object-cover" />
+              ) : (
+                <div className="text-center text-[#D9E3D8] dark:text-[#2A332E] space-y-2">
+                  <Camera size={44} strokeWidth={1.5} />
+                  <p className="text-[10px] font-black uppercase tracking-widest">Add / Change Photo</p>
+                </div>
+              )}
+              <input type="file" ref={fileInputRef} onChange={handlePhoto} className="hidden" accept="image/*" />
+            </div>
+
+            <div className="flex-1 space-y-8">
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-[#A8BDB4] dark:text-[#5B6D65] uppercase tracking-[0.25em] ml-4">Nickname</label>
+                <input required value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Blossom" className="w-full p-6 bg-[#FFF9F2] dark:bg-[#1A211D] dark:text-white rounded-[30px] border-none outline-none ring-4 ring-transparent focus:ring-[#A7C080]/10 transition-all font-bold placeholder-[#D9E3D8] dark:placeholder-[#2A332E]" />
+              </div>
+
+              <div className="space-y-2 relative">
+                <label className="text-[10px] font-black text-[#A8BDB4] dark:text-[#5B6D65] uppercase tracking-[0.25em] ml-4">Variety</label>
+                <input value={species} onChange={e => { setSpecies(e.target.value); setShowSuggestions(true); }} placeholder="e.g. Pothos" className="w-full p-6 bg-[#FFF9F2] dark:bg-[#1A211D] dark:text-white rounded-[30px] border-none outline-none ring-4 ring-transparent focus:ring-[#A7C080]/10 transition-all font-bold placeholder-[#D9E3D8] dark:placeholder-[#2A332E]" />
+                {showSuggestions && filteredSuggestions.length > 0 && (
+                  <div className="absolute left-0 right-0 top-full mt-4 bg-white dark:bg-[#2A332E] border-2 border-[#F2E8D5] dark:border-[#1A211D] rounded-[30px] shadow-2xl z-20 overflow-hidden">
+                    {filteredSuggestions.map(s => (
+                      <button key={s} type="button" onClick={() => { setSpecies(s); setShowSuggestions(false); }} className="w-full px-6 py-5 text-left hover:bg-[#EAF2ED] dark:hover:bg-[#A7C080]/10 text-sm font-bold dark:text-slate-200 transition-colors">{s}</button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-[#A8BDB4] dark:text-[#5B6D65] uppercase tracking-[0.25em] ml-4">Sip Frequency (Days)</label>
+              <input type="number" value={frequency} onChange={e => setFrequency(e.target.value)} className="w-full p-6 bg-[#FFF9F2] dark:bg-[#1A211D] dark:text-white rounded-[30px] border-none outline-none" />
+            </div>
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-[#A8BDB4] dark:text-[#5B6D65] uppercase tracking-[0.25em] ml-4">Last Watered</label>
+              <input type="date" value={lastWatered} onChange={e => setLastWatered(e.target.value)} className="w-full p-6 bg-[#FFF9F2] dark:bg-[#1A211D] dark:text-white rounded-[30px] border-none outline-none [color-scheme:light] dark:[color-scheme:dark]" />
+            </div>
+          </div>
+
+          <button type="submit" className="w-full py-8 bg-[#A7C080] text-white rounded-[40px] font-black text-2xl shadow-[0_20px_40px_rgba(167,192,128,0.3)] dark:shadow-none hover:bg-[#96AD73] transition-all active:scale-95 mt-6 border-b-8 border-[#8FA66A] dark:border-transparent">
+            SAVE CHANGES
           </button>
         </form>
       </div>
