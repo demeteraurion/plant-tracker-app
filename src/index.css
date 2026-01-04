@@ -1,0 +1,15 @@
+@import "tailwindcss";
+/* Keep all your cozy fonts and scrollbar styles below this! */
+@import url('https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600;700&family=Comfortaa:wght@400;700&display=swap');
+/* If you have a tailwind.config.js file, add this line right below the import: */
+@config "../tailwind.config.js";
+
+
+
+:root {
+  font-family: 'Quicksand', sans-serif;
+}
+
+.font-serif {
+  font-family: 'Comfortaa', cursive;
+}
