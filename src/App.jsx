@@ -25,7 +25,8 @@ import {
   Sun,
   CloudRain,
   Flower2,
-  Stars
+  Stars,
+  Wind
 } from 'lucide-react';
 
 // --- IndexedDB Configuration ---
@@ -450,7 +451,7 @@ function DetailView({ plant, onBack, onWater, onDelete }) {
                   <span className="text-sm font-black tracking-widest uppercase">{plant.species || 'Nature\'s Gem'}</span>
                 </div>
               </div>
-              <button onClick={() => deletePlant(plant.id)} className="p-5 text-[#F2C6C2] dark:text-[#B17F7A] hover:text-[#D98E82] hover:bg-[#FFF4F2] dark:hover:bg-[#B17F7A]/10 rounded-[30px] transition-all">
+              <button onClick={() => onDelete(plant.id)} className="p-5 text-[#F2C6C2] dark:text-[#B17F7A] hover:text-[#D98E82] hover:bg-[#FFF4F2] dark:hover:bg-[#B17F7A]/10 rounded-[30px] transition-all">
                 <Trash2 size={28} />
               </button>
             </div>
@@ -471,7 +472,7 @@ function DetailView({ plant, onBack, onWater, onDelete }) {
             <div className="space-y-6 pt-6 border-t-4 border-dotted border-[#F2E8D5] dark:border-[#2A332E]">
               <div className="flex items-center justify-between">
                 <span className="text-slate-400 dark:text-[#5B6D65] font-bold uppercase tracking-widest text-[10px]">Last Hydration</span>
-                <span className="font-black text-[#5C4D42] dark:text-[#CBD5D0]">{new Date(plant.lastWatered).toLocaleDateString()}</span>
+                <span className="font-black text-[#5C4D42] dark:text-[#CBD5D0]">{(plant.lastWatered ? new Date(plant.lastWatered).toLocaleDateString() : '—')}</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-slate-400 dark:text-[#5B6D65] font-bold uppercase tracking-widest text-[10px]">Next Best Time</span>
