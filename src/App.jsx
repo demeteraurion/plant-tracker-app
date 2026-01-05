@@ -486,7 +486,7 @@ const markWatered = (id) => {
             <nav className="flex-1 space-y-3">
               <NavItem active={view === 'dashboard'} onClick={() => { setView('dashboard'); setSelectedPlantId(null); if (window.innerWidth < 1024) setIsSidebarOpen(false); }} icon={<Home size={22}/>} label="Home Sweet Home" />
               <NavItem active={view === 'list'} onClick={() => { setView('list'); setSelectedPlantId(null); if (window.innerWidth < 1024) setIsSidebarOpen(false); }} icon={<LayoutGrid size={22}/>} label="My Planties" />
-              <NavItem active={false} icon={<Calendar size={22}/>} label="Care Tracker" disabled />
+             
             </nav>
 
             <div className="mt-auto space-y-4">               <div className="bg-gradient-to-tr from-[#FDF2F0] to-[#FFF9F2] dark:from-[#232B26] dark:to-[#1A211D] rounded-[32px] p-6 text-center border-2 border-dashed border-[#F2C6C2]/30 dark:border-[#A7C080]/10 relative overflow-hidden group">
@@ -674,7 +674,7 @@ function DashboardView({ plants, onPlantClick, onWater }) {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
         <StickerCard label="My Garden" value={plants.length} icon={<Sprout />} type="plants" />
         <StickerCard label="Thirsty" value={overdue.length} icon={<CloudRain />} type="water" highlight={overdue.length > 0} />
-        <StickerCard label="Tasks" value={today.length} icon={<CheckCircle2 />} type="today" />
+        <StickerCard label="Due Today" value={today.length} icon={<CheckCircle2 />} type="today" />
       </div>
 
       <section>
