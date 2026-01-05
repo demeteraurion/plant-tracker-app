@@ -1,33 +1,32 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { 
-  Plus, 
-  Droplets, 
-  Calendar, 
-  Heart, 
-  ChevronRight, 
-  Camera, 
-  Trash2, 
-  CheckCircle2, 
-  AlertCircle, 
-  Search,
+import { supabase } from './supabaseClient';
+import {
+  Plus,
+  Droplets,
+  Calendar,
+  Trash2,
   ArrowLeft,
   LayoutGrid,
   List as ListIcon,
   X,
   Sparkles,
   Download,
-  Upload,
-  Home,
   Sprout,
-  Menu,
-  Clock,
-  Moon,
-  Sun,
-  CloudRain,
   Flower2,
   Stars,
+  Home,
+  Upload,
+  Menu,
+  Search,
+  Sun,
+  Moon,
+  Camera,
+  CloudRain,
+  CheckCircle2,
+  Heart,
   Wind
 } from 'lucide-react';
+
 
 // --- IndexedDB Configuration ---
 const DB_NAME = 'PlantTrackerDB_CuteCozy';
@@ -131,19 +130,95 @@ export default function App() {
     return localStorage.getItem('plantTrackerTheme') === 'dark';
   });
 
+  const [session, setSession] = useState(null);
+  const user = session?.user ?? null;
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [authEmail, setAuthEmail] = useState('');
+  const [authMessage, setAuthMessage] = useState('');
+  const [isAuthBusy, setIsAuthBusy] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
+
   useEffect(() => {
-    const loadData = async () => {
+    let isMounted = true;
+
+    supabase.auth.getSession().then(({ data, error }) => {
+      if (!isMounted) return;
+      if (error) {
+        console.error('Failed to get session', error);
+        return;
+      }
+      setSession(data?.session ?? null);
+    });
+
+    const { data: authListener } = supabase.auth.onAuthStateChange((_event, sess) => {
+      setSession(sess);
+    });
+
+    return () => {
+      isMounted = false;
+      authListener?.subscription?.unsubscribe();
+    };
+  }, []);
+
+  useEffect(() => {
+    const loadPlants = async () => {
+      setIsLoading(true);
       try {
-        const data = await getAllPlants();
-        setPlants(data);
+        const uid = user?.id;
+        if (!uid) {
+          const local = await getAllPlants();
+          setPlants(local);
+          return;
+        }
+
+        setIsSyncing(true);
+
+        const local = await getAllPlants().catch(() => []);
+        const { data: rows, error } = await supabase
+          .from('plants')
+          .select('id, data, created_at, updated_at')
+          .eq('user_id', uid);
+
+        if (error) throw error;
+
+        const cloud = (rows ?? []).map((r) => ({ ...(r.data || {}), id: r.id }));
+
+        // One-time-ish merge: if there are local plants not yet in cloud, push them up.
+        const cloudIds = new Set(cloud.map((p) => p?.id).filter(Boolean));
+        const missingLocal = (local ?? []).filter((p) => p?.id && !cloudIds.has(p.id));
+
+        if (missingLocal.length) {
+          const payload = missingLocal.map((p) => ({
+            id: p.id,
+            user_id: uid,
+            data: p,
+          }));
+
+          const { error: upErr } = await supabase.from('plants').upsert(payload, { onConflict: 'id' });
+          if (upErr) throw upErr;
+
+          cloud.push(...missingLocal);
+        }
+
+        setPlants(cloud);
       } catch (e) {
-        console.error("Failed to load plants", e);
+        console.error('Failed to load plants (cloud)', e);
+
+        // Fallback: show local data so the app still works even if cloud is down.
+        try {
+          const local = await getAllPlants();
+          setPlants(local);
+        } catch (e2) {
+          console.error('Failed to load plants (local fallback)', e2);
+        }
       } finally {
+        setIsSyncing(false);
         setIsLoading(false);
       }
     };
-    loadData();
-  }, []);
+
+    loadPlants();
+  }, [user?.id]);
 
   useEffect(() => {
     localStorage.setItem('plantTrackerTheme', isDarkMode ? 'dark' : 'light');
@@ -201,30 +276,121 @@ export default function App() {
     return () => document.removeEventListener('keydown', onKeyDown);
   }, [searchQuery, searchResults]);
 
+  const upsertPlantToCloud = async (plant, uid) => {
+    const { error } = await supabase.from('plants').upsert(
+      {
+        id: plant.id,
+        user_id: uid,
+        data: plant,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'id' }
+    );
+    if (error) throw error;
+  };
+
+  const deletePlantFromCloud = async (id, uid) => {
+    const { error } = await supabase.from('plants').delete().eq('id', id).eq('user_id', uid);
+    if (error) throw error;
+  };
+
   const addPlant = async (newPlant) => {
     const plant = { ...newPlant, id: Date.now().toString(), createdAt: new Date() };
+
+    // Always keep local cache so the app works offline.
     await savePlantToDB(plant);
+
+    // If signed in, sync to cloud too.
+    if (user?.id) {
+      try {
+        await upsertPlantToCloud(plant, user.id);
+      } catch (e) {
+        console.error('Cloud sync failed (addPlant)', e);
+      }
+    }
+
     setPlants([...plants, plant]);
     setIsModalOpen(false);
   };
 
   const updatePlant = async (id, updates) => {
-    const existing = plants.find(p => p.id === id);
+    const existing = plants.find((p) => p.id === id);
     if (!existing) return;
 
     const newPlant = { ...existing, ...updates };
+
+    // Always update local cache so the app works offline.
     await savePlantToDB(newPlant);
-    setPlants(plants.map(p => (p.id === id ? newPlant : p)));
+
+    // If signed in, sync to cloud too.
+    if (user?.id) {
+      try {
+        await upsertPlantToCloud(newPlant, user.id);
+      } catch (e) {
+        console.error('Cloud sync failed (updatePlant)', e);
+      }
+    }
+
+    setPlants(plants.map((p) => (p.id === id ? newPlant : p)));
   };
 
   const deletePlant = async (id) => {
+    // Always delete from local cache.
     await deletePlantFromDB(id);
-    setPlants(plants.filter(p => p.id !== id));
+
+    // If signed in, delete from cloud too.
+    if (user?.id) {
+      try {
+        await deletePlantFromCloud(id, user.id);
+      } catch (e) {
+        console.error('Cloud sync failed (deletePlant)', e);
+      }
+    }
+
+    setPlants(plants.filter((p) => p.id !== id));
     setSelectedPlantId(null);
     setView('dashboard');
   };
 
-  const markWatered = (id) => {
+  
+  const sendMagicLink = async () => {
+    const email = authEmail.trim();
+    if (!email) return;
+
+    setIsAuthBusy(true);
+    setAuthMessage('');
+    try {
+      const { error } = await supabase.auth.signInWithOtp({
+        email,
+        options: {
+          emailRedirectTo: window.location.origin,
+        },
+      });
+      if (error) throw error;
+      setAuthMessage('Check your email for a sign-in link ✨');
+    } catch (e) {
+      console.error('Failed to send magic link', e);
+      setAuthMessage('Could not send sign-in link. Double-check the email and try again.');
+    } finally {
+      setIsAuthBusy(false);
+    }
+  };
+
+  const signOut = async () => {
+    setIsAuthBusy(true);
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+      setAuthMessage('');
+      setAuthEmail('');
+    } catch (e) {
+      console.error('Failed to sign out', e);
+    } finally {
+      setIsAuthBusy(false);
+    }
+  };
+
+const markWatered = (id) => {
     const now = new Date();
     updatePlant(id, { lastWatered: now.toISOString() });
   };
@@ -381,6 +547,33 @@ export default function App() {
             </div>
             
             <div className="flex items-center gap-4 ml-8">
+              <div className="flex items-center gap-3">
+                {isSyncing && (
+                  <span className="hidden md:inline-flex items-center px-4 py-2 rounded-[18px] border-2 border-dashed border-[#E8D7B8] dark:border-[#2A332E] bg-[#F7F2E8] dark:bg-[#232B26] text-[11px] font-black uppercase tracking-widest text-[#8AA79B] dark:text-[#A8BDB4]">
+                    Syncing…
+                  </span>
+                )}
+
+                {user ? (
+                  <button
+                    type="button"
+                    onClick={signOut}
+                    disabled={isAuthBusy}
+                    className="px-5 py-3 rounded-[22px] font-black border-2 border-black dark:border-[#2A332E] bg-white dark:bg-[#232B26] text-[#5C4D42] dark:text-white hover:translate-y-[-1px] active:translate-y-[0px] transition disabled:opacity-50"
+                    title={user.email || 'Signed in'}
+                  >
+                    Sign out
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => { setIsAuthModalOpen(true); setAuthMessage(''); }}
+                    className="px-5 py-3 rounded-[22px] font-black border-2 border-black dark:border-[#2A332E] bg-white dark:bg-[#232B26] text-[#5C4D42] dark:text-white hover:translate-y-[-1px] active:translate-y-[0px] transition"
+                  >
+                    Sign in
+                  </button>
+                )}
+              </div>
               <button 
                 onClick={() => setIsDarkMode(!isDarkMode)}
                 className="p-4 bg-white dark:bg-[#232B26] text-[#E8C06F] rounded-[24px] shadow-sm hover:rotate-12 transition-all active:scale-90 border-2 border-transparent dark:border-[#2A332E]"
@@ -404,11 +597,23 @@ export default function App() {
         </main>
 
         {isModalOpen && <AddPlantModal onClose={() => setIsModalOpen(false)} onSubmit={addPlant} />}
+
         {isEditModalOpen && selectedPlant && (
           <EditPlantModal
             plant={selectedPlant}
             onClose={() => setIsEditModalOpen(false)}
             onSubmit={(updates) => updatePlant(selectedPlant.id, updates)}
+          />
+        )}
+
+        {isAuthModalOpen && (
+          <AuthModal
+            onClose={() => { setIsAuthModalOpen(false); setAuthMessage(''); }}
+            email={authEmail}
+            setEmail={setAuthEmail}
+            onSendLink={sendMagicLink}
+            busy={isAuthBusy}
+            message={authMessage}
           />
         )}
       </div>
@@ -659,6 +864,62 @@ function PlantCard({ plant, onWater, onClick }) {
           >
             <Droplets size={24} fill="currentColor" />
           </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+function AuthModal({ onClose, email, setEmail, onSendLink, busy, message }) {
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-6 bg-black/40 backdrop-blur-sm">
+      <div className="w-full max-w-lg bg-white dark:bg-[#1D241F] border-2 border-black dark:border-[#2A332E] rounded-[32px] shadow-2xl overflow-hidden">
+        <div className="p-8">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <div className="text-xl font-black text-[#5C4D42] dark:text-white">Sign in to sync</div>
+              <div className="text-sm font-bold text-[#8AA79B] dark:text-[#A8BDB4] mt-1">
+                We’ll email you a magic link. No password.
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 rounded-[18px] font-black border-2 border-black dark:border-[#2A332E] bg-[#F7F2E8] dark:bg-[#232B26] hover:translate-y-[-1px] active:translate-y-[0px] transition"
+            >
+              Close
+            </button>
+          </div>
+
+          <div className="mt-6 space-y-4">
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@example.com"
+              className="w-full px-5 py-4 rounded-[22px] border-2 border-black dark:border-[#2A332E] bg-white dark:bg-[#232B26] text-[#5C4D42] dark:text-white font-bold outline-none focus:ring-2 focus:ring-[#A7C080]/40"
+            />
+
+            <button
+              type="button"
+              onClick={onSendLink}
+              disabled={busy || !email.trim()}
+              className="w-full px-6 py-4 rounded-[22px] font-black text-white bg-[#A7C080] hover:bg-[#96AD73] disabled:opacity-50 disabled:cursor-not-allowed shadow-[0_10px_25px_rgba(167,192,128,0.35)] dark:shadow-none transition"
+            >
+              {busy ? 'Sending…' : 'Email me a sign-in link'}
+            </button>
+
+            {message && (
+              <div className="text-sm font-bold text-[#5C4D42] dark:text-[#D9E3D8] bg-[#F7F2E8] dark:bg-[#232B26] border-2 border-dashed border-[#E8D7B8] dark:border-[#2A332E] rounded-[22px] px-5 py-4">
+                {message}
+              </div>
+            )}
+
+            <div className="text-[11px] font-bold uppercase tracking-widest text-[#A8BDB4] dark:text-[#5B6D65]">
+              Tip: you’ll stay logged in on this device.
+            </div>
+          </div>
         </div>
       </div>
     </div>
