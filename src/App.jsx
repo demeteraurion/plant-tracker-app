@@ -449,7 +449,17 @@ const markWatered = (id) => {
 
   return (
     <div className={`${isDarkMode ? 'dark' : ''}`}>
-      <div className="flex min-h-screen bg-[#FFF9F2] dark:bg-[#151A17] text-[#5C4D42] dark:text-[#CBD5D0] font-sans transition-colors duration-700 selection:bg-[#F2C6C2] selection:text-white">
+      <div className="flex min-h-screen w-full overflow-x-hidden bg-[#FFF9F2] dark:bg-[#151A17] text-[#5C4D42] dark:text-[#CBD5D0] font-sans transition-colors duration-700 selection:bg-[#F2C6C2] selection:text-white">
+
+        {/* Mobile sidebar backdrop (tap to close) */}
+        {isSidebarOpen && (
+          <button
+            type="button"
+            aria-label="Close sidebar"
+            onClick={() => setIsSidebarOpen(false)}
+            className="fixed inset-0 z-40 bg-black/30 lg:hidden"
+          />
+        )}
         
         {/* Bubbly Sidebar */}
         <aside className={`fixed inset-y-0 left-0 z-50 w-72 bg-white/60 dark:bg-[#1A211D]/80 backdrop-blur-xl border-r border-[#F2E8D5] dark:border-[#2A332E] transition-all duration-500 transform ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} lg:relative lg:translate-x-0 shadow-2xl lg:shadow-none`}>
@@ -462,20 +472,50 @@ const markWatered = (id) => {
                 <h1 className="text-2xl font-serif font-black tracking-tight text-[#8FA66A] dark:text-[#B8D194]">Bud & Bloom</h1>
                 <p className="text-[10px] uppercase tracking-widest font-bold opacity-50 dark:text-[#A7C080]">Garden Journal</p>
               </div>
+              <button
+                type="button"
+                aria-label="Close sidebar"
+                onClick={() => setIsSidebarOpen(false)}
+                className="lg:hidden ml-auto p-3 bg-white dark:bg-[#232B26] shadow-sm rounded-2xl dark:text-white transition-colors"
+              >
+                <X size={20} />
+              </button>
             </div>
 
             <nav className="flex-1 space-y-3">
-              <NavItem active={view === 'dashboard'} onClick={() => { setView('dashboard'); setSelectedPlantId(null); }} icon={<Home size={22}/>} label="Home Sweet Home" />
-              <NavItem active={view === 'list'} onClick={() => { setView('list'); setSelectedPlantId(null); }} icon={<LayoutGrid size={22}/>} label="My Planties" />
+              <NavItem active={view === 'dashboard'} onClick={() => { setView('dashboard'); setSelectedPlantId(null); if (window.innerWidth < 1024) setIsSidebarOpen(false); }} icon={<Home size={22}/>} label="Home Sweet Home" />
+              <NavItem active={view === 'list'} onClick={() => { setView('list'); setSelectedPlantId(null); if (window.innerWidth < 1024) setIsSidebarOpen(false); }} icon={<LayoutGrid size={22}/>} label="My Planties" />
               <NavItem active={false} icon={<Calendar size={22}/>} label="Care Tracker" disabled />
             </nav>
 
-            <div className="mt-auto space-y-4">
-               <div className="bg-gradient-to-tr from-[#FDF2F0] to-[#FFF9F2] dark:from-[#232B26] dark:to-[#1A211D] rounded-[32px] p-6 text-center border-2 border-dashed border-[#F2C6C2]/30 dark:border-[#A7C080]/10 relative overflow-hidden group">
+            <div className="mt-auto space-y-4">               <div className="bg-gradient-to-tr from-[#FDF2F0] to-[#FFF9F2] dark:from-[#232B26] dark:to-[#1A211D] rounded-[32px] p-6 text-center border-2 border-dashed border-[#F2C6C2]/30 dark:border-[#A7C080]/10 relative overflow-hidden group">
                 <Stars className="absolute -top-2 -right-2 text-[#F2C6C2] dark:text-[#E8C06F] opacity-40 group-hover:rotate-12 transition-transform" size={40} />
                 <p className="text-xs font-bold text-[#D98E82] dark:text-[#E8C06F] mb-1">Coziness Tip</p>
                 <p className="text-sm italic opacity-70 dark:text-slate-400">Dust your leaves gently with a damp cloth today! ✨</p>
               </div>
+			<div className="px-2">
+  {user ? (
+    <button
+      type="button"
+      onClick={signOut}
+      disabled={isAuthBusy}
+      className="w-full px-5 py-3 rounded-[22px] font-black border-2 border-black dark:border-[#2A332E] bg-white dark:bg-[#232B26] text-[#5C4D42] dark:text-white hover:translate-y-[-1px] active:translate-y-[0px] transition disabled:opacity-50"
+      title={user.email || 'Signed in'}
+    >
+      Sign out
+    </button>
+  ) : (
+    <button
+      type="button"
+      onClick={() => { setIsAuthModalOpen(true); setAuthMessage(''); }}
+      className="w-full px-5 py-3 rounded-[22px] font-black border-2 border-black dark:border-[#2A332E] bg-white dark:bg-[#232B26] text-[#5C4D42] dark:text-white hover:translate-y-[-1px] active:translate-y-[0px] transition"
+    >
+      Sign in
+    </button>
+  )}
+</div>
+
+
 
               <div className="flex justify-between px-2">
                 <button onClick={exportData} title="Backup" className="p-3 text-[#A8BDB4] dark:text-[#5B6D65] hover:text-[#8FA66A] hover:bg-white dark:hover:bg-[#2A332E] rounded-full transition-all">
@@ -546,33 +586,15 @@ const markWatered = (id) => {
               </div>
             </div>
             
-            <div className="flex items-center gap-4 ml-8">
+            <div className="flex items-center gap-4 ml-2 sm:ml-4 lg:ml-8">
               <div className="flex items-center gap-3">
-                {isSyncing && (
-                  <span className="hidden md:inline-flex items-center px-4 py-2 rounded-[18px] border-2 border-dashed border-[#E8D7B8] dark:border-[#2A332E] bg-[#F7F2E8] dark:bg-[#232B26] text-[11px] font-black uppercase tracking-widest text-[#8AA79B] dark:text-[#A8BDB4]">
-                    Syncing…
-                  </span>
-                )}
+  {isSyncing && (
+    <span className="hidden md:inline-flex items-center px-4 py-2 rounded-[18px] border-2 border-dashed border-[#E8D7B8] dark:border-[#2A332E] bg-[#F7F2E8] dark:bg-[#232B26] text-[11px] font-black uppercase tracking-widest text-[#8AA79B] dark:text-[#A8BDB4]">
+      Syncing…
+    </span>
+  )}
 
-                {user ? (
-                  <button
-                    type="button"
-                    onClick={signOut}
-                    disabled={isAuthBusy}
-                    className="px-5 py-3 rounded-[22px] font-black border-2 border-black dark:border-[#2A332E] bg-white dark:bg-[#232B26] text-[#5C4D42] dark:text-white hover:translate-y-[-1px] active:translate-y-[0px] transition disabled:opacity-50"
-                    title={user.email || 'Signed in'}
-                  >
-                    Sign out
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => { setIsAuthModalOpen(true); setAuthMessage(''); }}
-                    className="px-5 py-3 rounded-[22px] font-black border-2 border-black dark:border-[#2A332E] bg-white dark:bg-[#232B26] text-[#5C4D42] dark:text-white hover:translate-y-[-1px] active:translate-y-[0px] transition"
-                  >
-                    Sign in
-                  </button>
-                )}
+
               </div>
               <button 
                 onClick={() => setIsDarkMode(!isDarkMode)}
