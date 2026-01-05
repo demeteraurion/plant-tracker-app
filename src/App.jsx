@@ -709,7 +709,7 @@ function DashboardView({ plants, onPlantClick, onWater }) {
 }
 
 function ListView({ plants, filter, setFilter, onPlantClick, onWater }) {
-  const PAGE_SIZE = 24;
+  const PAGE_SIZE = 16;
 
   const [page, setPage] = React.useState(1);
 
