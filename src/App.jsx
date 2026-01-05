@@ -467,7 +467,7 @@ const markWatered = (id) => {
           <div className="flex flex-col h-full p-6">
             <div className="py-8 flex items-center gap-4 px-2">
               <div className="w-12 h-12 bg-gradient-to-br from-[#A7C080] to-[#8FA66A] rounded-[22px] flex items-center justify-center text-white shadow-[0_8px_20px_rgba(167,192,128,0.3)] animate-pulse">
-                <Flower2 size={26} />
+               <img src="/logo.png" alt="Root Record" />
               </div>
               <div>
                 <h1 className="text-2xl font-serif font-black tracking-tight text-[#8FA66A] dark:text-[#B8D194]">Root Record</h1>
