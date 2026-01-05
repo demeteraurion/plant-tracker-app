@@ -913,29 +913,39 @@ function DetailView({ plant, onBack, onWater, onDelete, onEdit }) {
             </div>
           </div>
           
-          <div className="p-12 lg:p-16 space-y-12">
-            <div className="flex justify-between items-start">
-              <div className="space-y-4">
-                <h1 className="text-5xl font-serif font-black text-[#5C4D42] dark:text-white leading-tight">{plant.name}</h1>
-                <div className="flex items-center gap-3 text-[#8FA66A] dark:text-[#A7C080] bg-[#EAF2ED] dark:bg-[#A7C080]/10 px-6 py-3 rounded-full w-fit border border-transparent dark:border-[#A7C080]/20">
-                  <Stars size={16} />
-                  <span className="text-sm font-black tracking-widest uppercase">{plant.species || 'Nature\'s Gem'}</span>
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={onEdit}
-                  className="p-5 text-[#A7C080] hover:text-[#8FA66A] hover:bg-[#EAF2ED] dark:hover:bg-[#A7C080]/10 rounded-[30px] transition-all"
-                  title="Edit"
-                >
-                  <span className="sr-only">Edit</span>
-                  <Sparkles size={28} />
-                </button>
-                <button onClick={() => onDelete(plant.id)} className="p-5 text-[#F2C6C2] dark:text-[#B17F7A] hover:text-[#D98E82] hover:bg-[#FFF4F2] dark:hover:bg-[#B17F7A]/10 rounded-[30px] transition-all">
-                  <Trash2 size={28} />
-                </button>
-              </div>
-            </div>
+<div className="flex items-start gap-6">
+  <div className="min-w-0 flex-1 space-y-4">
+    <h1 className="text-5xl font-serif font-black text-[#5C4D42] dark:text-white leading-tight truncate">
+      {plant.name}
+    </h1>
+
+    <div className="flex items-center gap-3 text-[#8FA66A] dark:text-[#A7C080] bg-[#EAF2ED] dark:bg-[#A7C080]/10 px-6 py-3 rounded-full w-fit border border-transparent dark:border-[#A7C080]/20">
+      <Stars size={16} />
+      <span className="text-sm font-black tracking-widest uppercase truncate">
+        {plant.species || "Nature's Gem"}
+      </span>
+    </div>
+  </div>
+
+  <div className="flex items-center gap-3 shrink-0">
+    <button
+      onClick={onEdit}
+      className="p-5 text-[#A7C080] hover:text-[#8FA66A] hover:bg-[#EAF2ED] dark:hover:bg-[#A7C080]/10 rounded-[30px] transition-all"
+      title="Edit"
+    >
+      <span className="sr-only">Edit</span>
+      <Sparkles size={28} />
+    </button>
+
+    <button
+      onClick={() => onDelete(plant.id)}
+      className="p-5 text-[#F2C6C2] dark:text-[#B17F7A] hover:text-[#D98E82] hover:bg-[#FFF4F2] dark:hover:bg-[#B17F7A]/10 rounded-[30px] transition-all"
+    >
+      <Trash2 size={28} />
+    </button>
+  </div>
+</div>
+
 
             <div className="grid grid-cols-2 gap-8">
               <div className="bg-[#FEF9E7] dark:bg-[#2F332A] p-8 rounded-[40px] border-2 border-white dark:border-transparent shadow-sm transition-colors">
