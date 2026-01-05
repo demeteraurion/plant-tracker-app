@@ -709,36 +709,184 @@ function DashboardView({ plants, onPlantClick, onWater }) {
 }
 
 function ListView({ plants, filter, setFilter, onPlantClick, onWater }) {
+  const PAGE_SIZE = 24;
+
+  const [page, setPage] = React.useState(1);
+
+  const showPagination = plants.length > PAGE_SIZE;
+  const totalPages = showPagination ? Math.ceil(plants.length / PAGE_SIZE) : 1;
+
+  // Reset to page 1 when the visible list changes (search/filter/add/delete)
+  React.useEffect(() => {
+    setPage(1);
+  }, [plants.length, filter]);
+
+  // Clamp page if it becomes out of range
+  React.useEffect(() => {
+    setPage((p) => Math.min(Math.max(1, p), totalPages));
+  }, [totalPages]);
+
+  const pagedPlants = React.useMemo(() => {
+    if (!showPagination) return plants;
+    const start = (page - 1) * PAGE_SIZE;
+    return plants.slice(start, start + PAGE_SIZE);
+  }, [plants, page, showPagination]);
+
+  const goPrev = () => setPage((p) => Math.max(1, p - 1));
+  const goNext = () => setPage((p) => Math.min(totalPages, p + 1));
+
+  const pageItems = React.useMemo(() => {
+    if (!showPagination) return [1];
+
+    // Basic pagination: show first, last, and a window around current page.
+    if (totalPages <= 7) {
+      return Array.from({ length: totalPages }, (_, i) => i + 1);
+    }
+
+    const items = new Set([1, totalPages, page - 2, page - 1, page, page + 1, page + 2]);
+    const nums = Array.from(items)
+      .filter((n) => n >= 1 && n <= totalPages)
+      .sort((a, b) => a - b);
+
+    const out = [];
+    for (let i = 0; i < nums.length; i++) {
+      const n = nums[i];
+      out.push(n);
+      const next = nums[i + 1];
+      if (next && next > n + 1) out.push("…");
+    }
+    return out;
+  }, [page, totalPages, showPagination]);
+
+  const Pagination = ({ className = "" }) => {
+    if (!showPagination) return null;
+
+    return (
+      <div className={`flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 ${className}`}>
+        <div className="text-[11px] font-black uppercase tracking-widest text-[#A8BDB4] dark:text-[#5B6D65]">
+          Showing{" "}
+          <span className="text-[#5C4D42] dark:text-white">
+            {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, plants.length)}
+          </span>{" "}
+          of <span className="text-[#5C4D42] dark:text-white">{plants.length}</span>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={goPrev}
+            disabled={page === 1}
+            className="px-5 py-3 rounded-[22px] font-black border-2 border-black dark:border-[#2A332E] bg-white dark:bg-[#232B26] text-[#5C4D42] dark:text-white disabled:opacity-40 disabled:cursor-not-allowed hover:translate-y-[-1px] active:translate-y-[0px] transition"
+          >
+            Prev
+          </button>
+
+          <div className="flex items-center gap-1 bg-white/60 dark:bg-[#1A211D]/80 backdrop-blur rounded-full p-2 shadow-sm border border-[#F2E8D5] dark:border-[#2A332E]">
+            {pageItems.map((it, idx) => {
+              if (it === "…") {
+                return (
+                  <span
+                    key={`dots-${idx}`}
+                    className="px-3 py-2 text-xs font-black text-[#A8BDB4] dark:text-[#5B6D65]"
+                  >
+                    …
+                  </span>
+                );
+              }
+
+              const n = it;
+              const active = n === page;
+
+              return (
+                <button
+                  key={n}
+                  type="button"
+                  onClick={() => setPage(n)}
+                  className={`min-w-[44px] px-4 py-2 rounded-full text-xs font-black uppercase tracking-widest transition-all ${
+                    active
+                      ? "bg-[#A7C080] text-white shadow-md scale-105"
+                      : "text-[#A8BDB4] dark:text-[#5B6D65] hover:text-[#8FA66A] dark:hover:text-[#A7C080]"
+                  }`}
+                  aria-current={active ? "page" : undefined}
+                >
+                  {n}
+                </button>
+              );
+            })}
+          </div>
+
+          <button
+            type="button"
+            onClick={goNext}
+            disabled={page === totalPages}
+            className="px-5 py-3 rounded-[22px] font-black border-2 border-black dark:border-[#2A332E] bg-white dark:bg-[#232B26] text-[#5C4D42] dark:text-white disabled:opacity-40 disabled:cursor-not-allowed hover:translate-y-[-1px] active:translate-y-[0px] transition"
+          >
+            Next
+          </button>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="max-w-7xl mx-auto">
       <div className="flex flex-col md:flex-row md:items-center justify-between mb-12 gap-8">
-        <h2 className="text-4xl font-serif font-black text-[#5C4D42] dark:text-white">The Full Nursery</h2>
+        <h2 className="text-4xl font-serif font-black text-[#5C4D42] dark:text-white">
+          The Full Nursery
+        </h2>
+
         <div className="flex bg-white/60 dark:bg-[#1A211D]/80 backdrop-blur rounded-full p-2 shadow-sm border border-[#F2E8D5] dark:border-[#2A332E]">
-          {['all', 'overdue', 'today', 'upcoming'].map(f => (
-            <button 
-              key={f} 
+          {["all", "overdue", "today", "upcoming"].map((f) => (
+            <button
+              key={f}
               onClick={() => setFilter(f)}
-              className={`px-8 py-3 rounded-full text-xs font-black uppercase tracking-widest transition-all ${filter === f ? 'bg-[#A7C080] text-white shadow-md scale-105' : 'text-[#A8BDB4] dark:text-[#5B6D65] hover:text-[#8FA66A] dark:hover:text-[#A7C080]'}`}
+              className={`px-8 py-3 rounded-full text-xs font-black uppercase tracking-widest transition-all ${
+                filter === f
+                  ? "bg-[#A7C080] text-white shadow-md scale-105"
+                  : "text-[#A8BDB4] dark:text-[#5B6D65] hover:text-[#8FA66A] dark:hover:text-[#A7C080]"
+              }`}
             >
               {f}
             </button>
           ))}
         </div>
       </div>
-      
+
+      {/* Top pagination (only when needed) */}
+      {showPagination && <Pagination className="mb-8" />}
+
       {plants.length > 0 ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-10">
-          {plants.map(p => <PlantCard key={p.id} plant={p} onWater={onWater} onClick={() => onPlantClick(p.id)} />)}
-        </div>
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-10">
+            {pagedPlants.map((p) => (
+              <PlantCard
+                key={p.id}
+                plant={p}
+                onWater={onWater}
+                onClick={() => onPlantClick(p.id)}
+              />
+            ))}
+          </div>
+
+          {/* Bottom pagination (only when needed) */}
+          {showPagination && <Pagination className="mt-10" />}
+        </>
       ) : (
         <div className="text-center py-32 bg-white dark:bg-[#232B26] rounded-[60px] border-4 border-dashed border-[#F2E8D5] dark:border-[#2A332E]">
-          <Wind size={64} className="mx-auto text-[#D9E3D8] dark:text-[#151A17] mb-8 animate-pulse" />
-          <h3 className="text-2xl font-serif italic text-[#A8BDB4] dark:text-[#415147]">So much space for new plant friends...</h3>
+          <Wind
+            size={64}
+            className="mx-auto text-[#D9E3D8] dark:text-[#151A17] mb-8 animate-pulse"
+          />
+          <h3 className="text-2xl font-serif italic text-[#A8BDB4] dark:text-[#415147]">
+            So much space for new plant friends...
+          </h3>
         </div>
       )}
     </div>
   );
 }
+
+
 
 function DetailView({ plant, onBack, onWater, onDelete, onEdit }) {
   const nextDue = calculateNextDue(plant.lastWatered, plant.frequency);
