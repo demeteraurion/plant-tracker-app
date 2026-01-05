@@ -470,7 +470,7 @@ const markWatered = (id) => {
                 <Flower2 size={26} />
               </div>
               <div>
-                <h1 className="text-2xl font-serif font-black tracking-tight text-[#8FA66A] dark:text-[#B8D194]">Bud & Bloom</h1>
+                <h1 className="text-2xl font-serif font-black tracking-tight text-[#8FA66A] dark:text-[#B8D194]">Root Record</h1>
                 <p className="text-[10px] uppercase tracking-widest font-bold opacity-50 dark:text-[#A7C080]">Garden Journal</p>
               </div>
               <button
