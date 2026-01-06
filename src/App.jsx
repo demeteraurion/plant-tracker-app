@@ -120,6 +120,7 @@ export default function App() {
   const [selectedPlantId, setSelectedPlantId] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [isSearchPanelOpen, setIsSearchPanelOpen] = useState(false);
   const searchBoxRef = useRef(null);
 
   const [filter, setFilter] = useState('all');
@@ -235,16 +236,18 @@ export default function App() {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  useEffect(() => {
-    const onMouseDown = (e) => {
-      if (!searchBoxRef.current) return;
-      if (!searchBoxRef.current.contains(e.target)) {
-        setIsSearchOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', onMouseDown);
-    return () => document.removeEventListener('mousedown', onMouseDown);
-  }, []);
+useEffect(() => {
+  const onMouseDown = (e) => {
+    if (!searchBoxRef.current) return;
+    if (!searchBoxRef.current.contains(e.target)) {
+      setIsSearchOpen(false);
+      setIsSearchPanelOpen(false);
+    }
+  };
+  document.addEventListener('mousedown', onMouseDown);
+  return () => document.removeEventListener('mousedown', onMouseDown);
+}, []);
+
 
 
   const searchResults = useMemo(() => {
@@ -261,7 +264,11 @@ export default function App() {
 
   useEffect(() => {
     const onKeyDown = (e) => {
-      if (e.key === 'Escape') setIsSearchOpen(false);
+if (e.key === 'Escape') {
+  setIsSearchOpen(false);
+  setIsSearchPanelOpen(false);
+}
+
       if (e.key === 'Enter') {
         const q = searchQuery.trim();
         if (q && searchResults.length === 1) {
@@ -533,84 +540,148 @@ const markWatered = (id) => {
 
         {/* Main Workspace */}
         <main className="flex-1 flex flex-col min-w-0">
-          <header className="h-24 px-8 lg:px-12 flex items-center justify-between sticky top-0 z-40">
-            <div className="flex items-center gap-6 flex-1">
-              <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="lg:hidden p-3 bg-white dark:bg-[#232B26] shadow-sm rounded-2xl dark:text-white transition-colors">
-                <Menu size={20} />
-              </button>
-              <div ref={searchBoxRef} className="relative w-full max-w-xl group">
-                <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-[#D9E3D8] dark:text-[#415147] group-focus-within:text-[#A7C080] transition-colors" size={20} />
-                <input 
-                  type="text" 
-                  placeholder="Find a friend by name..." 
-                  className="w-full pl-14 pr-8 py-4 bg-white dark:bg-[#1A211D] border-2 border-transparent focus:border-[#A7C080]/30 dark:focus:border-[#A7C080]/20 rounded-[40px] shadow-[0_4px_15px_rgba(0,0,0,0.02)] dark:shadow-none outline-none text-sm transition-all placeholder-[#D9E3D8] dark:placeholder-[#415147] dark:text-white"
-                  value={searchQuery}
-                  onFocus={() => setIsSearchOpen(true)}
-                  onChange={(e) => { setSearchQuery(e.target.value); setIsSearchOpen(true); }}
-                />
+<header className="h-24 px-4 sm:px-6 lg:px-12 flex items-center justify-between sticky top-0 z-40">
+  {/* Left side: menu (mobile) */}
+  <div className="flex items-center gap-3 min-w-0">
+    <button
+      onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+      className="lg:hidden p-3 bg-white dark:bg-[#232B26] shadow-sm rounded-2xl dark:text-white transition-colors shrink-0"
+      aria-label="Toggle sidebar"
+    >
+      <Menu size={20} />
+    </button>
 
-                {isSearchOpen && searchQuery.trim() && (
-                  <div className="absolute left-0 right-0 mt-3 bg-white dark:bg-[#232B26] border-2 border-[#F2E8D5] dark:border-[#2A332E] rounded-[28px] overflow-hidden shadow-2xl z-50">
-                    {searchResults.length ? (
-                      <>
-                        {searchResults.map((p) => (
-                          <button
-                            key={p.id}
-                            type="button"
-                            className="w-full text-left px-6 py-4 hover:bg-[#EAF2ED] dark:hover:bg-[#A7C080]/10 transition-colors"
-                            onClick={() => {
-                              setSelectedPlantId(p.id);
-                              setView('detail');
-                              setSearchQuery('');
-                              setIsSearchOpen(false);
-                            }}
-                          >
-                            <div className="font-black text-sm text-[#5C4D42] dark:text-white truncate">
-                              {p.name || 'Unnamed plant'}
-                            </div>
-                            <div className="text-[11px] font-bold uppercase tracking-widest text-[#A8BDB4] dark:text-[#5B6D65] truncate mt-1">
-                              {p.species || "Nature's Gem"}
-                            </div>
-                          </button>
-                        ))}
-                        <div className="px-6 py-3 text-[10px] font-black uppercase tracking-[0.25em] text-[#D9E3D8] dark:text-[#415147] border-t border-[#F2E8D5] dark:border-[#2A332E]">
-                          Tip: press Enter if there’s only one match
-                        </div>
-                      </>
-                    ) : (
-                      <div className="px-6 py-5 text-sm font-bold text-[#A8BDB4] dark:text-[#5B6D65]">
-                        No matches
+    {/* Optional: you can put a tiny title/breadcrumb here later */}
+  </div>
+
+  {/* Right side: actions (NO WRAP) */}
+  <div className="flex items-center gap-2 sm:gap-4 flex-nowrap shrink-0">
+    {/* Search icon + popover */}
+    <div ref={searchBoxRef} className="relative shrink-0">
+      <button
+        type="button"
+        onClick={() => {
+          setIsSearchPanelOpen((v) => !v);
+          setIsSearchOpen(true);
+          setTimeout(() => {
+            const el = document.getElementById('header-search-input');
+            el?.focus();
+          }, 0);
+        }}
+        className="p-3 sm:p-4 bg-white dark:bg-[#232B26] text-[#8FA66A] dark:text-[#A7C080] rounded-[24px] shadow-sm hover:rotate-6 transition-all active:scale-90 border-2 border-transparent dark:border-[#2A332E]"
+        aria-label="Open search"
+        aria-expanded={isSearchPanelOpen}
+      >
+        <Search size={22} />
+      </button>
+
+      {isSearchPanelOpen && (
+        <div
+          className="
+            fixed left-4 right-4 top-24 z-[80]
+            lg:absolute lg:left-auto lg:right-0 lg:top-full lg:mt-3
+            lg:w-[520px]
+            bg-white dark:bg-[#232B26]
+            border-2 border-[#F2E8D5] dark:border-[#2A332E]
+            rounded-[28px]
+            shadow-2xl
+            overflow-hidden
+          "
+        >
+          <div className="p-4">
+            <div className="relative">
+              <Search
+                className="absolute left-4 top-1/2 -translate-y-1/2 text-[#D9E3D8] dark:text-[#415147]"
+                size={20}
+              />
+              <input
+                id="header-search-input"
+                type="text"
+                placeholder="Find a friend by name..."
+                className="w-full pl-12 pr-12 py-4 bg-[#FFF9F2] dark:bg-[#1A211D] border-2 border-transparent focus:border-[#A7C080]/30 dark:focus:border-[#A7C080]/20 rounded-[22px] outline-none text-base dark:text-white placeholder-[#D9E3D8] dark:placeholder-[#415147]"
+                value={searchQuery}
+                onFocus={() => setIsSearchOpen(true)}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  setIsSearchOpen(true);
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchQuery('');
+                  setIsSearchOpen(false);
+                  setIsSearchPanelOpen(false);
+                }}
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-3 rounded-[18px] hover:bg-white/60 dark:hover:bg-[#1A211D] transition"
+                aria-label="Close search"
+              >
+                <X size={18} />
+              </button>
+            </div>
+          </div>
+
+          {isSearchOpen && searchQuery.trim() && (
+            <div className="border-t border-[#F2E8D5] dark:border-[#2A332E]">
+              {searchResults.length ? (
+                <>
+                  {searchResults.map((p) => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      className="w-full text-left px-6 py-4 hover:bg-[#EAF2ED] dark:hover:bg-[#A7C080]/10 transition-colors"
+                      onClick={() => {
+                        setSelectedPlantId(p.id);
+                        setView('detail');
+                        setSearchQuery('');
+                        setIsSearchOpen(false);
+                        setIsSearchPanelOpen(false);
+                      }}
+                    >
+                      <div className="font-black text-sm text-[#5C4D42] dark:text-white truncate">
+                        {p.name || 'Unnamed plant'}
                       </div>
-                    )}
+                      <div className="text-[11px] font-bold uppercase tracking-widest text-[#A8BDB4] dark:text-[#5B6D65] truncate mt-1">
+                        {p.species || "Nature's Gem"}
+                      </div>
+                    </button>
+                  ))}
+                  <div className="px-6 py-3 text-[10px] font-black uppercase tracking-[0.25em] text-[#D9E3D8] dark:text-[#415147] border-t border-[#F2E8D5] dark:border-[#2A332E]">
+                    Tip: press Enter if there’s only one match
                   </div>
-                )}
-              </div>
+                </>
+              ) : (
+                <div className="px-6 py-5 text-sm font-bold text-[#A8BDB4] dark:text-[#5B6D65]">
+                  No matches
+                </div>
+              )}
             </div>
-            
-            <div className="flex items-center gap-4 ml-2 sm:ml-4 lg:ml-8">
-              <div className="flex items-center gap-3">
-  {isSyncing && (
-    <span className="hidden md:inline-flex items-center px-4 py-2 rounded-[18px] border-2 border-dashed border-[#E8D7B8] dark:border-[#2A332E] bg-[#F7F2E8] dark:bg-[#232B26] text-[11px] font-black uppercase tracking-widest text-[#8AA79B] dark:text-[#A8BDB4]">
-      Syncing…
-    </span>
-  )}
+          )}
+        </div>
+      )}
+    </div>
+
+    {/* Theme toggle */}
+    <button
+      onClick={() => setIsDarkMode(!isDarkMode)}
+      className="p-3 sm:p-4 bg-white dark:bg-[#232B26] text-[#E8C06F] rounded-[24px] shadow-sm hover:rotate-12 transition-all active:scale-90 border-2 border-transparent dark:border-[#2A332E] shrink-0"
+      aria-label="Toggle theme"
+    >
+      {isDarkMode ? <Sun size={22} fill="currentColor" /> : <Moon size={22} fill="currentColor" />}
+    </button>
+
+    {/* Add plant: icon-only on xs so it won't push Search to a new line */}
+    <button
+      onClick={() => setIsModalOpen(true)}
+      className="bg-[#A7C080] hover:bg-[#96AD73] text-white px-4 sm:px-6 py-3 sm:py-4 rounded-[30px] font-black text-sm flex items-center gap-2 shadow-[0_10px_25px_rgba(167,192,128,0.4)] dark:shadow-none transition-all active:scale-95 shrink-0"
+    >
+      <Plus size={20} strokeWidth={3} />
+      <span className="hidden sm:inline">ADD PLANT</span>
+    </button>
+  </div>
+</header>
 
 
-              </div>
-              <button 
-                onClick={() => setIsDarkMode(!isDarkMode)}
-                className="p-4 bg-white dark:bg-[#232B26] text-[#E8C06F] rounded-[24px] shadow-sm hover:rotate-12 transition-all active:scale-90 border-2 border-transparent dark:border-[#2A332E]"
-              >
-                {isDarkMode ? <Sun size={24} fill="currentColor" /> : <Moon size={24} fill="currentColor" />}
-              </button>
-              <button 
-                onClick={() => setIsModalOpen(true)}
-                className="bg-[#A7C080] hover:bg-[#96AD73] text-white px-8 py-4 rounded-[30px] font-black text-sm flex items-center gap-3 shadow-[0_10px_25px_rgba(167,192,128,0.4)] dark:shadow-none transition-all active:scale-95"
-              >
-                <Plus size={22} strokeWidth={3} /> ADD PLANT
-              </button>
-            </div>
-          </header>
 
           <div className="flex-1 overflow-y-auto p-8 lg:p-12 custom-scrollbar">
             {view === 'dashboard' && <DashboardView plants={filteredPlants} onPlantClick={(id) => { setSelectedPlantId(id); setView('detail'); }} onWater={markWatered} />}
