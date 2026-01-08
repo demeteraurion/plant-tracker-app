@@ -985,7 +985,8 @@ function DetailView({ plant, onBack, onWater, onDelete, onEdit }) {
             </div>
           </div>
           
-<div className="p-12 lg:p-16 space-y-12">
+<div className="p-6 sm:p-10 lg:p-16 space-y-8 sm:space-y-12">
+
   {/* HEADER */}
 <div className="flex items-center gap-4">
   {/* LEFT: species */}
@@ -1020,7 +1021,7 @@ function DetailView({ plant, onBack, onWater, onDelete, onEdit }) {
 
 {/* TITLE */}
 <div className="space-y-4">
-<h1 className="text-4xl lg:text-5xl font-serif font-black text-[#5C4D42] dark:text-white leading-tight break-words [overflow-wrap:anywhere]">
+<h1 className="text-2xl sm:text-3xl lg:text-5xl font-serif font-black text-[#5C4D42] dark:text-white leading-snug break-words [overflow-wrap:anywhere]">
   {plant.name}
 </h1>
 
@@ -1032,11 +1033,12 @@ function DetailView({ plant, onBack, onWater, onDelete, onEdit }) {
             <div className="grid grid-cols-2 gap-8">
               <div className="bg-[#FEF9E7] dark:bg-[#2F332A] p-8 rounded-[40px] border-2 border-white dark:border-transparent shadow-sm transition-colors">
                 <p className="text-[10px] font-black text-[#D9C582] dark:text-[#E8C06F] uppercase tracking-[0.25em] mb-2 text-center">Interval</p>
-                <p className="text-2xl font-black text-[#5C4D42] dark:text-[#E8DCCB] text-center">{plant.frequency} Days</p>
+                <p className="text-lg sm:text-xl font-black text-[#5C4D42] dark:text-[#E8DCCB] text-center">
+{plant.frequency} Days</p>
               </div>
               <div className={`p-8 rounded-[40px] border-2 border-white dark:border-transparent shadow-sm transition-colors ${status === 'overdue' ? 'bg-[#FFF4F2] dark:bg-[#3D2B29]' : 'bg-[#EAF2ED] dark:bg-[#2A332E]'}`}>
                 <p className={`text-[10px] font-black uppercase tracking-[0.25em] mb-2 text-center ${status === 'overdue' ? 'text-[#D98E82]' : 'text-[#8FA66A]'}`}>Feeling</p>
-                <p className={`text-2xl font-black text-center capitalize ${status === 'overdue' ? 'text-[#D98E82]' : 'text-[#8FA66A]'}`}>
+                <p className={`text-lg sm:text-xl font-black text-center capitalize ${status === 'overdue' ? 'text-[#D98E82]' : 'text-[#8FA66A]'}`}>
                   {status === 'overdue' ? 'Thirsty' : 'Happy'}
                 </p>
               </div>
@@ -1045,7 +1047,8 @@ function DetailView({ plant, onBack, onWater, onDelete, onEdit }) {
             <div className="space-y-6 pt-6 border-t-4 border-dotted border-[#F2E8D5] dark:border-[#2A332E]">
               <div className="flex items-center justify-between">
                 <span className="text-slate-400 dark:text-[#5B6D65] font-bold uppercase tracking-widest text-[10px]">Last Hydration</span>
-                <span className="font-black text-[#5C4D42] dark:text-[#CBD5D0]">{(plant.lastWatered ? new Date(plant.lastWatered).toLocaleDateString() : '—')}</span>
+                <span className="font-bold text-sm sm:text-base text-[#5C4D42] dark:text-[#CBD5D0]">
+{(plant.lastWatered ? new Date(plant.lastWatered).toLocaleDateString() : '—')}</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-slate-400 dark:text-[#5B6D65] font-bold uppercase tracking-widest text-[10px]">Next Best Time</span>
@@ -1053,12 +1056,27 @@ function DetailView({ plant, onBack, onWater, onDelete, onEdit }) {
               </div>
             </div>
 
-            <button 
-              onClick={() => onWater(plant.id)}
-              className="w-full py-8 bg-gradient-to-r from-[#8DA399] to-[#A7C080] text-white rounded-[40px] font-black shadow-[0_15px_40px_rgba(167,192,128,0.4)] dark:shadow-none flex items-center justify-center gap-4 hover:scale-[1.02] transition-all active:scale-95 text-xl"
-            >
-              <Droplets size={32} /> MARK AS REFRESHED
-            </button>
+<button
+  onClick={() => onWater(plant.id)}
+  className="
+    w-full
+    py-4 sm:py-6
+    bg-gradient-to-r from-[#8DA399] to-[#A7C080]
+    text-white
+    rounded-[36px]
+    font-black
+    shadow-[0_12px_32px_rgba(167,192,128,0.35)]
+    dark:shadow-none
+    flex items-center justify-center gap-3
+    transition-all
+    active:scale-95
+    text-sm sm:text-base lg:text-lg
+  "
+>
+  <Droplets className="w-5 h-5 sm:w-6 sm:h-6" />
+  <span className="tracking-wide">MARK AS REFRESHED</span>
+</button>
+
           </div>
         </div>
       </div>
