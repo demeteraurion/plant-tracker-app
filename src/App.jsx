@@ -1,18 +1,20 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { supabase } from './supabaseClient';
+﻿import React, { useState, useEffect, useMemo, useRef } from 'react';
+import {
+  deletePlantFromDB,
+  getAllPlants,
+  replacePlantsInDB,
+  savePlantToDB,
+} from './plantStorage';
 import {
   Plus,
   Droplets,
-  Calendar,
   Trash2,
   ArrowLeft,
   LayoutGrid,
-  List as ListIcon,
   X,
   Sparkles,
   Download,
   Sprout,
-  Flower2,
   Stars,
   Home,
   Upload,
@@ -28,58 +30,9 @@ import {
   Wind
 } from 'lucide-react';
 
-
-// --- IndexedDB Configuration ---
-const DB_NAME = 'PlantTrackerDB_CuteCozy';
-const DB_VERSION = 1;
-const STORE_NAME = 'plants';
-
-const initDB = () => {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, DB_VERSION);
-    request.onupgradeneeded = (event) => {
-      const db = event.target.result;
-      if (!db.objectStoreNames.contains(STORE_NAME)) {
-        db.createObjectStore(STORE_NAME, { keyPath: 'id' });
-      }
-    };
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
-  });
-};
-
-const getAllPlants = async () => {
-  const db = await initDB();
-  return new Promise((resolve, reject) => {
-    const transaction = db.transaction(STORE_NAME, 'readonly');
-    const store = transaction.objectStore(STORE_NAME);
-    const request = store.getAll();
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
-  });
-};
-
-const savePlantToDB = async (plant) => {
-  const db = await initDB();
-  return new Promise((resolve, reject) => {
-    const transaction = db.transaction(STORE_NAME, 'readwrite');
-    transaction.oncomplete = () => resolve(true);
-    transaction.onerror = () => reject(transaction.error);
-    transaction.objectStore(STORE_NAME).put(plant);
-  });
-};
-
-const deletePlantFromDB = async (id) => {
-  const db = await initDB();
-  return new Promise((resolve, reject) => {
-    const transaction = db.transaction(STORE_NAME, 'readwrite');
-    transaction.oncomplete = () => resolve(true);
-    transaction.onerror = () => reject(transaction.error);
-    transaction.objectStore(STORE_NAME).delete(id);
-  });
-};
-
 // --- Constants ---
+const BASE_URL = import.meta.env.BASE_URL;
+
 const POPULAR_PLANTS = [
   "Aloe Vera", "African Violet", "Anthurium", "Areca Palm", "Asparagus Fern",
   "Bamboo Palm", "Begonia", "Bird of Paradise", "Boston Fern", "Burro's Tail",
@@ -113,6 +66,23 @@ const getStatus = (nextDue) => {
   return 'upcoming';
 };
 
+const createPlantId = () => {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+
+  return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+};
+
+const normalizeImportedPlant = (plant) => {
+  if (!plant || typeof plant !== 'object' || Array.isArray(plant)) return null;
+
+  return {
+    ...plant,
+    id: plant.id ? String(plant.id) : createPlantId(),
+  };
+};
+
 // --- Main App Component ---
 export default function App() {
   const [plants, setPlants] = useState([]);
@@ -132,95 +102,21 @@ export default function App() {
     return localStorage.getItem('plantTrackerTheme') === 'dark';
   });
 
-  const [session, setSession] = useState(null);
-  const user = session?.user ?? null;
-  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
-  const [authEmail, setAuthEmail] = useState('');
-  const [authMessage, setAuthMessage] = useState('');
-  const [isAuthBusy, setIsAuthBusy] = useState(false);
-  const [isSyncing, setIsSyncing] = useState(false);
-
-  useEffect(() => {
-    let isMounted = true;
-
-    supabase.auth.getSession().then(({ data, error }) => {
-      if (!isMounted) return;
-      if (error) {
-        console.error('Failed to get session', error);
-        return;
-      }
-      setSession(data?.session ?? null);
-    });
-
-    const { data: authListener } = supabase.auth.onAuthStateChange((_event, sess) => {
-      setSession(sess);
-    });
-
-    return () => {
-      isMounted = false;
-      authListener?.subscription?.unsubscribe();
-    };
-  }, []);
-
   useEffect(() => {
     const loadPlants = async () => {
       setIsLoading(true);
       try {
-        const uid = user?.id;
-        if (!uid) {
-          const local = await getAllPlants();
-          setPlants(local);
-          return;
-        }
-
-        setIsSyncing(true);
-
-        const local = await getAllPlants().catch(() => []);
-        const { data: rows, error } = await supabase
-          .from('plants')
-          .select('id, data, created_at, updated_at')
-          .eq('user_id', uid);
-
-        if (error) throw error;
-
-        const cloud = (rows ?? []).map((r) => ({ ...(r.data || {}), id: r.id }));
-
-        // One-time-ish merge: if there are local plants not yet in cloud, push them up.
-        const cloudIds = new Set(cloud.map((p) => p?.id).filter(Boolean));
-        const missingLocal = (local ?? []).filter((p) => p?.id && !cloudIds.has(p.id));
-
-        if (missingLocal.length) {
-          const payload = missingLocal.map((p) => ({
-            id: p.id,
-            user_id: uid,
-            data: p,
-          }));
-
-          const { error: upErr } = await supabase.from('plants').upsert(payload, { onConflict: 'id' });
-          if (upErr) throw upErr;
-
-          cloud.push(...missingLocal);
-        }
-
-        setPlants(cloud);
+        const local = await getAllPlants();
+        setPlants(local);
       } catch (e) {
-        console.error('Failed to load plants (cloud)', e);
-
-        // Fallback: show local data so the app still works even if cloud is down.
-        try {
-          const local = await getAllPlants();
-          setPlants(local);
-        } catch (e2) {
-          console.error('Failed to load plants (local fallback)', e2);
-        }
+        console.error('Failed to load plants', e);
       } finally {
-        setIsSyncing(false);
         setIsLoading(false);
       }
     };
 
     loadPlants();
-  }, [user?.id]);
+  }, []);
 
   useEffect(() => {
     localStorage.setItem('plantTrackerTheme', isDarkMode ? 'dark' : 'light');
@@ -284,40 +180,10 @@ if (e.key === 'Escape') {
     return () => document.removeEventListener('keydown', onKeyDown);
   }, [searchQuery, searchResults]);
 
-  const upsertPlantToCloud = async (plant, uid) => {
-    const { error } = await supabase.from('plants').upsert(
-      {
-        id: plant.id,
-        user_id: uid,
-        data: plant,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: 'id' }
-    );
-    if (error) throw error;
-  };
-
-  const deletePlantFromCloud = async (id, uid) => {
-    const { error } = await supabase.from('plants').delete().eq('id', id).eq('user_id', uid);
-    if (error) throw error;
-  };
-
   const addPlant = async (newPlant) => {
-    const plant = { ...newPlant, id: Date.now().toString(), createdAt: new Date() };
-
-    // Always keep local cache so the app works offline.
+    const plant = { ...newPlant, id: createPlantId(), createdAt: new Date().toISOString() };
     await savePlantToDB(plant);
-
-    // If signed in, sync to cloud too.
-    if (user?.id) {
-      try {
-        await upsertPlantToCloud(plant, user.id);
-      } catch (e) {
-        console.error('Cloud sync failed (addPlant)', e);
-      }
-    }
-
-    setPlants([...plants, plant]);
+    setPlants((current) => [...current, plant]);
     setIsModalOpen(false);
   };
 
@@ -327,84 +193,23 @@ if (e.key === 'Escape') {
 
     const newPlant = { ...existing, ...updates };
 
-    // Always update local cache so the app works offline.
     await savePlantToDB(newPlant);
-
-    // If signed in, sync to cloud too.
-    if (user?.id) {
-      try {
-        await upsertPlantToCloud(newPlant, user.id);
-      } catch (e) {
-        console.error('Cloud sync failed (updatePlant)', e);
-      }
-    }
-
-    setPlants(plants.map((p) => (p.id === id ? newPlant : p)));
+    setPlants((current) => current.map((p) => (p.id === id ? newPlant : p)));
   };
 
   const deletePlant = async (id) => {
-    // Always delete from local cache.
     await deletePlantFromDB(id);
-
-    // If signed in, delete from cloud too.
-    if (user?.id) {
-      try {
-        await deletePlantFromCloud(id, user.id);
-      } catch (e) {
-        console.error('Cloud sync failed (deletePlant)', e);
-      }
-    }
-
-    setPlants(plants.filter((p) => p.id !== id));
+    setPlants((current) => current.filter((p) => p.id !== id));
     setSelectedPlantId(null);
     setView('dashboard');
   };
-
-  
-  const sendMagicLink = async () => {
-    const email = authEmail.trim();
-    if (!email) return;
-
-    setIsAuthBusy(true);
-    setAuthMessage('');
-    try {
-      const { error } = await supabase.auth.signInWithOtp({
-        email,
-        options: {
-          emailRedirectTo: window.location.origin,
-        },
-      });
-      if (error) throw error;
-      setAuthMessage('Check your email for a sign-in link ✨');
-    } catch (e) {
-      console.error('Failed to send magic link', e);
-      setAuthMessage('Could not send sign-in link. Double-check the email and try again.');
-    } finally {
-      setIsAuthBusy(false);
-    }
-  };
-
-  const signOut = async () => {
-    setIsAuthBusy(true);
-    try {
-      const { error } = await supabase.auth.signOut();
-      if (error) throw error;
-      setAuthMessage('');
-      setAuthEmail('');
-    } catch (e) {
-      console.error('Failed to sign out', e);
-    } finally {
-      setIsAuthBusy(false);
-    }
-  };
-
-const markWatered = (id) => {
+  const markWatered = (id) => {
     const now = new Date();
     updatePlant(id, { lastWatered: now.toISOString() });
   };
 
   const exportData = () => {
-    const dataStr = JSON.stringify(plants);
+    const dataStr = JSON.stringify(plants, null, 2);
     const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
     const linkElement = document.createElement('a');
     linkElement.setAttribute('href', dataUri);
@@ -419,9 +224,22 @@ const markWatered = (id) => {
     reader.onload = async (e) => {
       try {
         const imported = JSON.parse(e.target.result);
-        for (const plant of imported) await savePlantToDB(plant);
-        setPlants(imported);
-      } catch (err) { console.error("Import failed", err); }
+        if (!Array.isArray(imported)) {
+          throw new Error('Import file must contain an array of plants.');
+        }
+
+        const normalized = imported
+          .map(normalizeImportedPlant)
+          .filter(Boolean);
+
+        await replacePlantsInDB(normalized);
+        setPlants(normalized);
+      } catch (err) {
+        console.error('Import failed', err);
+        window.alert('Import failed. Please choose a valid Root Record JSON backup.');
+      } finally {
+        event.target.value = '';
+      }
     };
     reader.readAsText(file);
   };
@@ -474,7 +292,7 @@ const markWatered = (id) => {
           <div className="flex flex-col h-full p-6">
             <div className="py-8 flex items-center gap-4 px-2">
               <div className="w-12 h-12 bg-gradient-to-br from-[#A7C080] to-[#8FA66A] rounded-[22px] flex items-center justify-center text-white shadow-[0_8px_20px_rgba(167,192,128,0.3)] animate-pulse">
-               <img src="/logo.png" alt="Root Record" />
+               <img src={`${BASE_URL}logo.png`} alt="Root Record" />
               </div>
               <div>
                 <h1 className="text-2xl font-serif font-black tracking-tight text-[#8FA66A] dark:text-[#B8D194]">Root Record</h1>
@@ -499,32 +317,8 @@ const markWatered = (id) => {
             <div className="mt-auto space-y-4">               <div className="bg-gradient-to-tr from-[#FDF2F0] to-[#FFF9F2] dark:from-[#232B26] dark:to-[#1A211D] rounded-[32px] p-6 text-center border-2 border-dashed border-[#F2C6C2]/30 dark:border-[#A7C080]/10 relative overflow-hidden group">
                 <Stars className="absolute -top-2 -right-2 text-[#F2C6C2] dark:text-[#E8C06F] opacity-40 group-hover:rotate-12 transition-transform" size={40} />
                 <p className="text-xs font-bold text-[#D98E82] dark:text-[#E8C06F] mb-1">Coziness Tip</p>
-                <p className="text-sm italic opacity-70 dark:text-slate-400">Dust your leaves gently with a damp cloth today! ✨</p>
+                <p className="text-sm italic opacity-70 dark:text-slate-400">Dust your leaves gently with a damp cloth today! *</p>
               </div>
-			<div className="px-2">
-  {user ? (
-    <button
-      type="button"
-      onClick={signOut}
-      disabled={isAuthBusy}
-      className="w-full px-5 py-3 rounded-[22px] font-black border-2 border-black dark:border-[#2A332E] bg-white dark:bg-[#232B26] text-[#5C4D42] dark:text-white hover:translate-y-[-1px] active:translate-y-[0px] transition disabled:opacity-50"
-      title={user.email || 'Signed in'}
-    >
-      Sign out
-    </button>
-  ) : (
-    <button
-      type="button"
-      onClick={() => { setIsAuthModalOpen(true); setAuthMessage(''); }}
-      className="w-full px-5 py-3 rounded-[22px] font-black border-2 border-black dark:border-[#2A332E] bg-white dark:bg-[#232B26] text-[#5C4D42] dark:text-white hover:translate-y-[-1px] active:translate-y-[0px] transition"
-    >
-      Sign in
-    </button>
-  )}
-</div>
-
-
-
               <div className="flex justify-between px-2">
                 <button onClick={exportData} title="Backup" className="p-3 text-[#A8BDB4] dark:text-[#5B6D65] hover:text-[#8FA66A] hover:bg-white dark:hover:bg-[#2A332E] rounded-full transition-all">
                   <Download size={18} />
@@ -647,7 +441,7 @@ const markWatered = (id) => {
                     </button>
                   ))}
                   <div className="px-6 py-3 text-[10px] font-black uppercase tracking-[0.25em] text-[#D9E3D8] dark:text-[#415147] border-t border-[#F2E8D5] dark:border-[#2A332E]">
-                    Tip: press Enter if there’s only one match
+                    Tip: press Enter if there's only one match
                   </div>
                 </>
               ) : (
@@ -700,16 +494,6 @@ const markWatered = (id) => {
           />
         )}
 
-        {isAuthModalOpen && (
-          <AuthModal
-            onClose={() => { setIsAuthModalOpen(false); setAuthMessage(''); }}
-            email={authEmail}
-            setEmail={setAuthEmail}
-            onSendLink={sendMagicLink}
-            busy={isAuthBusy}
-            message={authMessage}
-          />
-        )}
       </div>
     </div>
   );
@@ -825,12 +609,12 @@ function ListView({ plants, filter, setFilter, onPlantClick, onWater }) {
       const n = nums[i];
       out.push(n);
       const next = nums[i + 1];
-      if (next && next > n + 1) out.push("…");
+      if (next && next > n + 1) out.push("...");
     }
     return out;
   }, [page, totalPages, showPagination]);
 
-  const Pagination = ({ className = "" }) => {
+  const renderPagination = (className = "") => {
     if (!showPagination) return null;
 
     return (
@@ -838,7 +622,7 @@ function ListView({ plants, filter, setFilter, onPlantClick, onWater }) {
         <div className="text-[11px] font-black uppercase tracking-widest text-[#A8BDB4] dark:text-[#5B6D65]">
           Showing{" "}
           <span className="text-[#5C4D42] dark:text-white">
-            {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, plants.length)}
+            {(page - 1) * PAGE_SIZE + 1}-{Math.min(page * PAGE_SIZE, plants.length)}
           </span>{" "}
           of <span className="text-[#5C4D42] dark:text-white">{plants.length}</span>
         </div>
@@ -855,13 +639,13 @@ function ListView({ plants, filter, setFilter, onPlantClick, onWater }) {
 
           <div className="flex items-center gap-1 bg-white/60 dark:bg-[#1A211D]/80 backdrop-blur rounded-full p-2 shadow-sm border border-[#F2E8D5] dark:border-[#2A332E]">
             {pageItems.map((it, idx) => {
-              if (it === "…") {
+              if (it === "...") {
                 return (
                   <span
                     key={`dots-${idx}`}
                     className="px-3 py-2 text-xs font-black text-[#A8BDB4] dark:text-[#5B6D65]"
                   >
-                    …
+                    ...
                   </span>
                 );
               }
@@ -925,7 +709,7 @@ function ListView({ plants, filter, setFilter, onPlantClick, onWater }) {
       </div>
 
       {/* Top pagination (only when needed) */}
-      {showPagination && <Pagination className="mb-8" />}
+      {showPagination && renderPagination("mb-8")}
 
       {plants.length > 0 ? (
         <>
@@ -941,7 +725,7 @@ function ListView({ plants, filter, setFilter, onPlantClick, onWater }) {
           </div>
 
           {/* Bottom pagination (only when needed) */}
-          {showPagination && <Pagination className="mt-10" />}
+          {showPagination && renderPagination("mt-10")}
         </>
       ) : (
         <div className="text-center py-32 bg-white dark:bg-[#232B26] rounded-[60px] border-4 border-dashed border-[#F2E8D5] dark:border-[#2A332E]">
@@ -1048,7 +832,7 @@ function DetailView({ plant, onBack, onWater, onDelete, onEdit }) {
               <div className="flex items-center justify-between">
                 <span className="text-slate-400 dark:text-[#5B6D65] font-bold uppercase tracking-widest text-[10px]">Last Hydration</span>
                 <span className="font-bold text-sm sm:text-base text-[#5C4D42] dark:text-[#CBD5D0]">
-{(plant.lastWatered ? new Date(plant.lastWatered).toLocaleDateString() : '—')}</span>
+{(plant.lastWatered ? new Date(plant.lastWatered).toLocaleDateString() : '-')}</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-slate-400 dark:text-[#5B6D65] font-bold uppercase tracking-widest text-[10px]">Next Best Time</span>
@@ -1150,61 +934,6 @@ function PlantCard({ plant, onWater, onClick }) {
   );
 }
 
-
-function AuthModal({ onClose, email, setEmail, onSendLink, busy, message }) {
-  return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-6 bg-black/40 backdrop-blur-sm">
-      <div className="w-full max-w-lg bg-white dark:bg-[#1D241F] border-2 border-black dark:border-[#2A332E] rounded-[32px] shadow-2xl overflow-hidden">
-        <div className="p-8">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <div className="text-xl font-black text-[#5C4D42] dark:text-white">Sign in to sync</div>
-              <div className="text-sm font-bold text-[#8AA79B] dark:text-[#A8BDB4] mt-1">
-                We’ll email you a magic link. No password.
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 rounded-[18px] font-black border-2 border-black dark:border-[#2A332E] bg-[#F7F2E8] dark:bg-[#232B26] hover:translate-y-[-1px] active:translate-y-[0px] transition"
-            >
-              Close
-            </button>
-          </div>
-
-          <div className="mt-6 space-y-4">
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@example.com"
-              className="w-full px-5 py-4 rounded-[22px] border-2 border-black dark:border-[#2A332E] bg-white dark:bg-[#232B26] text-[#5C4D42] dark:text-white font-bold outline-none focus:ring-2 focus:ring-[#A7C080]/40"
-            />
-
-            <button
-              type="button"
-              onClick={onSendLink}
-              disabled={busy || !email.trim()}
-              className="w-full px-6 py-4 rounded-[22px] font-black text-white bg-[#A7C080] hover:bg-[#96AD73] disabled:opacity-50 disabled:cursor-not-allowed shadow-[0_10px_25px_rgba(167,192,128,0.35)] dark:shadow-none transition"
-            >
-              {busy ? 'Sending…' : 'Email me a sign-in link'}
-            </button>
-
-            {message && (
-              <div className="text-sm font-bold text-[#5C4D42] dark:text-[#D9E3D8] bg-[#F7F2E8] dark:bg-[#232B26] border-2 border-dashed border-[#E8D7B8] dark:border-[#2A332E] rounded-[22px] px-5 py-4">
-                {message}
-              </div>
-            )}
-
-            <div className="text-[11px] font-bold uppercase tracking-widest text-[#A8BDB4] dark:text-[#5B6D65]">
-              Tip: you’ll stay logged in on this device.
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 function AddPlantModal({ onClose, onSubmit }) {
   const [name, setName] = useState('');
@@ -1398,36 +1127,3 @@ function EditPlantModal({ plant, onClose, onSubmit }) {
   );
 }
 
-const styles = `
-  .custom-scrollbar::-webkit-scrollbar {
-    width: 10px;
-  }
-  .custom-scrollbar::-webkit-scrollbar-track {
-    background: transparent;
-  }
-  .custom-scrollbar::-webkit-scrollbar-thumb {
-    background: #EBE3D5;
-    border-radius: 20px;
-    border: 3px solid transparent;
-    background-clip: content-box;
-  }
-  .dark .custom-scrollbar::-webkit-scrollbar-thumb {
-    background: #2A332E;
-  }
-  @keyframes spin-slow {
-    from { transform: rotate(0deg); }
-    to { transform: rotate(360deg); }
-  }
-  .animate-spin-slow {
-    animation: spin-slow 12s linear infinite;
-  }
-  [color-scheme="dark"]::-webkit-calendar-picker-indicator {
-    filter: invert(1);
-  }
-`;
-
-if (typeof document !== 'undefined') {
-  const styleSheet = document.createElement("style");
-  styleSheet.innerText = styles;
-  document.head.appendChild(styleSheet);
-}
