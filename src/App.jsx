@@ -171,6 +171,10 @@ export default function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [installPrompt, setInstallPrompt] = useState(null);
+  const [isStandalone, setIsStandalone] = useState(false);
+  const [isIOS, setIsIOS] = useState(false);
+  const [showIOSInstructions, setShowIOSInstructions] = useState(false);
   const [photoOptimizationMessage, setPhotoOptimizationMessage] = useState('');
   const [isDarkMode, setIsDarkMode] = useState(() => {
     return localStorage.getItem('plantTrackerTheme') === 'dark';
@@ -278,6 +282,23 @@ export default function App() {
     window.addEventListener('resize', handleResize);
     handleResize();
     return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  useEffect(() => {
+    const standalone = window.matchMedia('(display-mode: standalone)').matches;
+    setIsStandalone(standalone);
+    if (standalone) return;
+
+    const ios = /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.MSStream;
+    setIsIOS(ios);
+
+    const handleBeforeInstallPrompt = (event) => {
+      event.preventDefault();
+      setInstallPrompt(event);
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    return () => window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
   }, []);
 
 useEffect(() => {
@@ -392,6 +413,17 @@ if (e.key === 'Escape') {
     reader.readAsText(file);
   };
 
+  const handleInstall = async () => {
+    if (!installPrompt) return;
+
+    installPrompt.prompt();
+    const { outcome } = await installPrompt.userChoice;
+
+    if (outcome === 'accepted') {
+      setInstallPrompt(null);
+    }
+  };
+
   const filteredPlants = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     return plants.filter(p => {
@@ -491,6 +523,51 @@ if (e.key === 'Escape') {
               <NavItem active={view === 'list'} onClick={() => { setView('list'); setSelectedPlantId(null); if (window.innerWidth < 1024) setIsSidebarOpen(false); }} icon={<LayoutGrid size={22}/>} label="My Planties" />
              
             </nav>
+
+            {!isStandalone && (installPrompt || isIOS) && (
+              <div className="relative px-2 pb-4">
+                {isIOS && !installPrompt && showIOSInstructions && (
+                  <div className="absolute bottom-full left-2 right-2 mb-3 rounded-[20px] bg-[#E8F0E8] p-4 text-xs font-bold text-[#5C4D42] shadow-2xl dark:bg-[#1A211D] dark:text-[#CBD5D0]">
+                    <button
+                      type="button"
+                      onClick={() => setShowIOSInstructions(false)}
+                      className="absolute right-3 top-2 text-base text-[#8FA66A] dark:text-[#A7C080]"
+                      aria-label="Close install instructions"
+                    >
+                      x
+                    </button>
+                    <p className="pr-5">To install Root Record:</p>
+                    <ol className="mt-2 list-decimal space-y-1 pl-4">
+                      <li>Tap the Share button at the bottom of Safari.</li>
+                      <li>Scroll down and tap Add to Home Screen.</li>
+                      <li>Tap Add in the top right.</li>
+                    </ol>
+                  </div>
+                )}
+
+                {installPrompt && (
+                  <button
+                    type="button"
+                    onClick={handleInstall}
+                    className="w-full flex items-center gap-5 px-6 py-5 rounded-[32px] text-[#A8BDB4] dark:text-[#5B6D65] hover:bg-white dark:hover:bg-[#232B26] hover:text-[#8FA66A] dark:hover:text-[#A7C080] transition-all"
+                  >
+                    <Download size={16} />
+                    <span className="font-bold tracking-tight text-[15px]">Install App</span>
+                  </button>
+                )}
+
+                {isIOS && !installPrompt && (
+                  <button
+                    type="button"
+                    onClick={() => setShowIOSInstructions((current) => !current)}
+                    className="w-full flex items-center gap-5 px-6 py-5 rounded-[32px] text-[#A8BDB4] dark:text-[#5B6D65] hover:bg-white dark:hover:bg-[#232B26] hover:text-[#8FA66A] dark:hover:text-[#A7C080] transition-all"
+                  >
+                    <Download size={16} />
+                    <span className="font-bold tracking-tight text-[15px]">Install App</span>
+                  </button>
+                )}
+              </div>
+            )}
 
             <div className="space-y-3 px-2 pb-4">
               <p className="truncate text-[11px] font-bold text-[#A8BDB4] dark:text-[#5B6D65]">
