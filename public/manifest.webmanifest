@@ -1,0 +1,28 @@
+{
+  "name": "Root Record - Plant Care Tracker",
+  "short_name": "Root Record",
+  "description": "Track houseplants, watering schedules, and daily plant care.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#FFF9F2",
+  "theme_color": "#8FA66A",
+  "icons": [
+    {
+      "src": "./pwa-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "./pwa-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "./pwa-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

@@ -2,9 +2,13 @@
 import {
   deletePlantFromDB,
   getAllPlants,
+  getAllPlantsFromIndexedDB,
   replacePlantsInDB,
   savePlantToDB,
 } from './plantStorage';
+import { onAuthStateChanged, signOut } from 'firebase/auth';
+import Auth from './Auth';
+import { auth } from './firebase';
 import {
   Plus,
   Droplets,
@@ -94,6 +98,8 @@ export default function App() {
   const searchBoxRef = useRef(null);
 
   const [filter, setFilter] = useState('all');
+  const [user, setUser] = useState(null);
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -103,20 +109,50 @@ export default function App() {
   });
 
   useEffect(() => {
+    return onAuthStateChanged(auth, (nextUser) => {
+      setUser(nextUser);
+      setIsAuthLoading(false);
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!user) {
+      setPlants([]);
+      setIsLoading(false);
+      return;
+    }
+
+    let isActive = true;
+
     const loadPlants = async () => {
       setIsLoading(true);
       try {
-        const local = await getAllPlants();
-        setPlants(local);
+        const indexedDbPlants = await getAllPlantsFromIndexedDB();
+        let firestorePlants = await getAllPlants();
+
+        if (indexedDbPlants.length > 0 && firestorePlants.length === 0) {
+          await replacePlantsInDB(indexedDbPlants);
+          firestorePlants = indexedDbPlants;
+        }
+
+        if (isActive) {
+          setPlants(firestorePlants);
+        }
       } catch (e) {
         console.error('Failed to load plants', e);
       } finally {
-        setIsLoading(false);
+        if (isActive) {
+          setIsLoading(false);
+        }
       }
     };
 
     loadPlants();
-  }, []);
+
+    return () => {
+      isActive = false;
+    };
+  }, [user]);
 
   useEffect(() => {
     localStorage.setItem('plantTrackerTheme', isDarkMode ? 'dark' : 'light');
@@ -260,14 +296,39 @@ if (e.key === 'Escape') {
 
   const selectedPlant = plants.find(p => p.id === selectedPlantId);
 
+  if (isAuthLoading) {
+    return (
+      <div className={`${isDarkMode ? 'dark' : ''}`}>
+        <div className="flex items-center justify-center min-h-screen bg-[#FFF9F2] dark:bg-[#151A17]">
+          <div className="flex flex-col items-center gap-4">
+            <div className="animate-bounce">
+              <Sprout size={48} className="text-[#A7C080]" />
+            </div>
+            <p className="font-serif italic text-[#A7C080]">Checking your garden gate...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className={`${isDarkMode ? 'dark' : ''}`}>
+        <Auth />
+      </div>
+    );
+  }
+
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-[#FFF9F2] dark:bg-[#151A17]">
-        <div className="flex flex-col items-center gap-4">
-          <div className="animate-bounce">
-            <Sprout size={48} className="text-[#A7C080]" />
+      <div className={`${isDarkMode ? 'dark' : ''}`}>
+        <div className="flex items-center justify-center min-h-screen bg-[#FFF9F2] dark:bg-[#151A17]">
+          <div className="flex flex-col items-center gap-4">
+            <div className="animate-bounce">
+              <Sprout size={48} className="text-[#A7C080]" />
+            </div>
+            <p className="font-serif italic text-[#A7C080]">Waking up the seedlings...</p>
           </div>
-          <p className="font-serif italic text-[#A7C080]">Waking up the seedlings...</p>
         </div>
       </div>
     );
@@ -313,6 +374,19 @@ if (e.key === 'Escape') {
               <NavItem active={view === 'list'} onClick={() => { setView('list'); setSelectedPlantId(null); if (window.innerWidth < 1024) setIsSidebarOpen(false); }} icon={<LayoutGrid size={22}/>} label="My Planties" />
              
             </nav>
+
+            <div className="space-y-3 px-2 pb-4">
+              <p className="truncate text-[11px] font-bold text-[#A8BDB4] dark:text-[#5B6D65]">
+                {user.email}
+              </p>
+              <button
+                type="button"
+                onClick={() => signOut(auth)}
+                className="w-full rounded-[22px] bg-white/70 px-4 py-3 text-left text-sm font-bold text-[#A8BDB4] transition hover:bg-white hover:text-[#8FA66A] dark:bg-[#232B26]/80 dark:text-[#5B6D65] dark:hover:text-[#A7C080]"
+              >
+                Sign out
+              </button>
+            </div>
 
             <div className="mt-auto space-y-4">               <div className="bg-gradient-to-tr from-[#FDF2F0] to-[#FFF9F2] dark:from-[#232B26] dark:to-[#1A211D] rounded-[32px] p-6 text-center border-2 border-dashed border-[#F2C6C2]/30 dark:border-[#A7C080]/10 relative overflow-hidden group">
                 <Stars className="absolute -top-2 -right-2 text-[#F2C6C2] dark:text-[#E8C06F] opacity-40 group-hover:rotate-12 transition-transform" size={40} />
