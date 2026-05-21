@@ -128,18 +128,38 @@ export default function App() {
       setIsLoading(true);
       try {
         const indexedDbPlants = await getAllPlantsFromIndexedDB();
-        let firestorePlants = await getAllPlants();
+        const firestorePlants = await getAllPlants();
+        const firestorePlantIds = new Set(firestorePlants.map((plant) => plant.id));
+        const localPlantsToMigrate = indexedDbPlants.filter(
+          (plant) => plant.id && !firestorePlantIds.has(plant.id),
+        );
+        let migratedLocalPlants = [];
 
-        if (indexedDbPlants.length > 0 && firestorePlants.length === 0) {
-          await replacePlantsInDB(indexedDbPlants);
-          firestorePlants = indexedDbPlants;
+        if (localPlantsToMigrate.length > 0) {
+          const migrationResults = await Promise.allSettled(
+            localPlantsToMigrate.map((plant) => savePlantToDB(plant)),
+          );
+
+          migratedLocalPlants = localPlantsToMigrate.filter(
+            (_, index) => migrationResults[index].status === 'fulfilled',
+          );
+
+          const migrationErrors = migrationResults
+            .filter((result) => result.status === 'rejected')
+            .map((result) => result.reason);
+
+          if (migrationErrors.length > 0) {
+            console.error('Failed to migrate some local plants', migrationErrors);
+            window.alert('Some local plants could not be synced to Firestore. Check your Firebase Firestore rules and any large plant photos, then try again.');
+          }
         }
 
         if (isActive) {
-          setPlants(firestorePlants);
+          setPlants([...firestorePlants, ...migratedLocalPlants]);
         }
       } catch (e) {
         console.error('Failed to load plants', e);
+        window.alert('Root Record could not load or migrate your synced plants. Check your Firebase Firestore rules and try again.');
       } finally {
         if (isActive) {
           setIsLoading(false);
