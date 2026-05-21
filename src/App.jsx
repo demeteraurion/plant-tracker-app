@@ -524,77 +524,92 @@ if (e.key === 'Escape') {
              
             </nav>
 
-            {!isStandalone && (installPrompt || isIOS) && (
-              <div className="relative px-2 pb-4">
-                {isIOS && !installPrompt && showIOSInstructions && (
-                  <div className="absolute bottom-full left-2 right-2 mb-3 rounded-[20px] bg-[#E8F0E8] p-4 text-xs font-bold text-[#5C4D42] shadow-2xl dark:bg-[#1A211D] dark:text-[#CBD5D0]">
-                    <button
-                      type="button"
-                      onClick={() => setShowIOSInstructions(false)}
-                      className="absolute right-3 top-2 text-base text-[#8FA66A] dark:text-[#A7C080]"
-                      aria-label="Close install instructions"
-                    >
-                      x
-                    </button>
-                    <p className="pr-5">To install Root Record:</p>
-                    <ol className="mt-2 list-decimal space-y-1 pl-4">
-                      <li>Tap the Share button at the bottom of Safari.</li>
-                      <li>Scroll down and tap Add to Home Screen.</li>
-                      <li>Tap Add in the top right.</li>
-                    </ol>
-                  </div>
-                )}
-
-                {installPrompt && (
-                  <button
-                    type="button"
-                    onClick={handleInstall}
-                    className="w-full flex items-center gap-5 px-6 py-5 rounded-[32px] text-[#A8BDB4] dark:text-[#5B6D65] hover:bg-white dark:hover:bg-[#232B26] hover:text-[#8FA66A] dark:hover:text-[#A7C080] transition-all"
-                  >
-                    <Download size={16} />
-                    <span className="font-bold tracking-tight text-[15px]">Install App</span>
-                  </button>
-                )}
-
-                {isIOS && !installPrompt && (
-                  <button
-                    type="button"
-                    onClick={() => setShowIOSInstructions((current) => !current)}
-                    className="w-full flex items-center gap-5 px-6 py-5 rounded-[32px] text-[#A8BDB4] dark:text-[#5B6D65] hover:bg-white dark:hover:bg-[#232B26] hover:text-[#8FA66A] dark:hover:text-[#A7C080] transition-all"
-                  >
-                    <Download size={16} />
-                    <span className="font-bold tracking-tight text-[15px]">Install App</span>
-                  </button>
-                )}
-              </div>
-            )}
-
-            <div className="space-y-3 px-2 pb-4">
-              <p className="truncate text-[11px] font-bold text-[#A8BDB4] dark:text-[#5B6D65]">
-                {user.email}
-              </p>
-              <button
-                type="button"
-                onClick={() => signOut(auth)}
-                className="w-full rounded-[22px] bg-white/70 px-4 py-3 text-left text-sm font-bold text-[#A8BDB4] transition hover:bg-white hover:text-[#8FA66A] dark:bg-[#232B26]/80 dark:text-[#5B6D65] dark:hover:text-[#A7C080]"
-              >
-                Sign out
-              </button>
-            </div>
-
-            <div className="mt-auto space-y-4">               <div className="bg-gradient-to-tr from-[#FDF2F0] to-[#FFF9F2] dark:from-[#232B26] dark:to-[#1A211D] rounded-[32px] p-6 text-center border-2 border-dashed border-[#F2C6C2]/30 dark:border-[#A7C080]/10 relative overflow-hidden group">
+            <div className="mt-auto space-y-4">
+              <div className="bg-gradient-to-tr from-[#FDF2F0] to-[#FFF9F2] dark:from-[#232B26] dark:to-[#1A211D] rounded-[32px] p-6 text-center border-2 border-dashed border-[#F2C6C2]/30 dark:border-[#A7C080]/10 relative overflow-hidden group">
                 <Stars className="absolute -top-2 -right-2 text-[#F2C6C2] dark:text-[#E8C06F] opacity-40 group-hover:rotate-12 transition-transform" size={40} />
                 <p className="text-xs font-bold text-[#D98E82] dark:text-[#E8C06F] mb-1">Coziness Tip</p>
                 <p className="text-sm italic opacity-70 dark:text-slate-400">Dust your leaves gently with a damp cloth today! *</p>
               </div>
-              <div className="flex justify-between px-2">
-                <button onClick={exportData} title="Backup" className="p-3 text-[#A8BDB4] dark:text-[#5B6D65] hover:text-[#8FA66A] hover:bg-white dark:hover:bg-[#2A332E] rounded-full transition-all">
-                  <Download size={18} />
-                </button>
-                <label className="p-3 text-[#A8BDB4] dark:text-[#5B6D65] hover:text-[#8FA66A] hover:bg-white dark:hover:bg-[#2A332E] rounded-full cursor-pointer transition-all">
-                  <Upload size={18} />
-                  <input type="file" className="hidden" accept=".json" onChange={importData} />
-                </label>
+
+              <div className="rounded-[30px] border border-white/70 bg-white/45 p-3 shadow-sm dark:border-[#2A332E] dark:bg-[#17201B]/80">
+                <div className="flex items-start justify-between gap-3 px-2 pb-3 pt-1">
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-black uppercase tracking-[0.25em] text-[#D9E3D8] dark:text-[#415147]">
+                      Signed in
+                    </p>
+                    <p className="mt-1 truncate text-xs font-bold text-[#A8BDB4] dark:text-[#6D857A]">
+                      {user.email}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => signOut(auth)}
+                    className="shrink-0 rounded-full bg-white px-3 py-2 text-xs font-black text-[#8FA66A] shadow-sm transition hover:bg-[#EAF2ED] dark:bg-[#232B26] dark:text-[#A7C080] dark:hover:bg-[#2A332E]"
+                  >
+                    Sign out
+                  </button>
+                </div>
+
+                {!isStandalone && (installPrompt || isIOS) && (
+                  <div className="relative pb-2">
+                    {isIOS && !installPrompt && showIOSInstructions && (
+                      <div className="absolute bottom-full left-0 right-0 z-10 mb-3 rounded-[20px] bg-[#E8F0E8] p-4 text-xs font-bold text-[#5C4D42] shadow-2xl dark:bg-[#1A211D] dark:text-[#CBD5D0]">
+                        <button
+                          type="button"
+                          onClick={() => setShowIOSInstructions(false)}
+                          className="absolute right-3 top-2 text-base text-[#8FA66A] dark:text-[#A7C080]"
+                          aria-label="Close install instructions"
+                        >
+                          x
+                        </button>
+                        <p className="pr-5">To install Root Record:</p>
+                        <ol className="mt-2 list-decimal space-y-1 pl-4">
+                          <li>Tap the Share button at the bottom of Safari.</li>
+                          <li>Scroll down and tap Add to Home Screen.</li>
+                          <li>Tap Add in the top right.</li>
+                        </ol>
+                      </div>
+                    )}
+
+                    {installPrompt && (
+                      <button
+                        type="button"
+                        onClick={handleInstall}
+                        className="flex w-full items-center justify-center gap-2 rounded-[22px] bg-[#A7C080] px-4 py-3 text-sm font-black text-white shadow-[0_10px_22px_rgba(167,192,128,0.24)] transition hover:bg-[#96AD73] active:scale-95 dark:shadow-none"
+                      >
+                        <Download size={16} />
+                        Install App
+                      </button>
+                    )}
+
+                    {isIOS && !installPrompt && (
+                      <button
+                        type="button"
+                        onClick={() => setShowIOSInstructions((current) => !current)}
+                        className="flex w-full items-center justify-center gap-2 rounded-[22px] bg-[#A7C080] px-4 py-3 text-sm font-black text-white shadow-[0_10px_22px_rgba(167,192,128,0.24)] transition hover:bg-[#96AD73] active:scale-95 dark:shadow-none"
+                      >
+                        <Download size={16} />
+                        Install App
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    onClick={exportData}
+                    title="Backup"
+                    className="flex min-h-11 items-center justify-center gap-2 rounded-[20px] bg-white/75 px-3 py-3 text-xs font-black text-[#A8BDB4] transition hover:bg-white hover:text-[#8FA66A] dark:bg-[#232B26]/80 dark:text-[#6D857A] dark:hover:bg-[#2A332E] dark:hover:text-[#A7C080]"
+                  >
+                    <Download size={16} />
+                    Backup
+                  </button>
+                  <label className="flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-[20px] bg-white/75 px-3 py-3 text-xs font-black text-[#A8BDB4] transition hover:bg-white hover:text-[#8FA66A] dark:bg-[#232B26]/80 dark:text-[#6D857A] dark:hover:bg-[#2A332E] dark:hover:text-[#A7C080]">
+                    <Upload size={16} />
+                    Restore
+                    <input type="file" className="hidden" accept=".json" onChange={importData} />
+                  </label>
+                </div>
               </div>
             </div>
           </div>
