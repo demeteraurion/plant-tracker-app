@@ -87,6 +87,73 @@ const normalizeImportedPlant = (plant) => {
   };
 };
 
+const compressImage = (input, maxWidth = 800, maxHeight = 800, quality = 0.8) => {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+
+    img.onload = () => {
+      let { width, height } = img;
+
+      if (width > maxWidth || height > maxHeight) {
+        const ratio = Math.min(maxWidth / width, maxHeight / height);
+        width = Math.round(width * ratio);
+        height = Math.round(height * ratio);
+      }
+
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+
+      const context = canvas.getContext('2d');
+      if (!context) {
+        reject(new Error('Image compression could not create a canvas context.'));
+        return;
+      }
+
+      context.drawImage(img, 0, 0, width, height);
+      resolve(canvas.toDataURL('image/jpeg', quality));
+    };
+
+    img.onerror = reject;
+
+    if (typeof input === 'string') {
+      img.src = input;
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      img.src = event.target.result;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(input);
+  });
+};
+
+const compressOversizedPlantPhotos = async (plants) => {
+  const results = await Promise.all(
+    plants.map(async (plant) => {
+      if (
+        !plant.photo ||
+        !plant.photo.startsWith('data:') ||
+        plant.photo.length <= 200000
+      ) {
+        return plant;
+      }
+
+      try {
+        const photo = await compressImage(plant.photo);
+        return { ...plant, photo };
+      } catch (error) {
+        console.error('Failed to optimize an existing plant photo', error);
+        return plant;
+      }
+    }),
+  );
+
+  return results;
+};
+
 // --- Main App Component ---
 export default function App() {
   const [plants, setPlants] = useState([]);
@@ -104,6 +171,7 @@ export default function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [photoOptimizationMessage, setPhotoOptimizationMessage] = useState('');
   const [isDarkMode, setIsDarkMode] = useState(() => {
     return localStorage.getItem('plantTrackerTheme') === 'dark';
   });
@@ -133,14 +201,37 @@ export default function App() {
         const localPlantsToMigrate = indexedDbPlants.filter(
           (plant) => plant.id && !firestorePlantIds.has(plant.id),
         );
+        const plantsNeedingOptimization = [...firestorePlants, ...localPlantsToMigrate]
+          .filter((plant) =>
+            plant.photo &&
+            plant.photo.startsWith('data:') &&
+            plant.photo.length > 200000
+          );
         let migratedLocalPlants = [];
+
+        if (plantsNeedingOptimization.length > 0 && isActive) {
+          setPhotoOptimizationMessage('Optimizing photos...');
+        }
+
+        const optimizedFirestorePlants = await compressOversizedPlantPhotos(firestorePlants);
+        const optimizedLocalPlantsToMigrate = await compressOversizedPlantPhotos(localPlantsToMigrate);
+        const optimizedFirestoreById = new Map(
+          optimizedFirestorePlants.map((plant) => [plant.id, plant]),
+        );
+        const changedFirestorePlants = firestorePlants
+          .filter((plant) => optimizedFirestoreById.get(plant.id)?.photo !== plant.photo)
+          .map((plant) => optimizedFirestoreById.get(plant.id));
+
+        if (changedFirestorePlants.length > 0) {
+          await Promise.all(changedFirestorePlants.map((plant) => savePlantToDB(plant)));
+        }
 
         if (localPlantsToMigrate.length > 0) {
           const migrationResults = await Promise.allSettled(
-            localPlantsToMigrate.map((plant) => savePlantToDB(plant)),
+            optimizedLocalPlantsToMigrate.map((plant) => savePlantToDB(plant)),
           );
 
-          migratedLocalPlants = localPlantsToMigrate.filter(
+          migratedLocalPlants = optimizedLocalPlantsToMigrate.filter(
             (_, index) => migrationResults[index].status === 'fulfilled',
           );
 
@@ -155,7 +246,7 @@ export default function App() {
         }
 
         if (isActive) {
-          setPlants([...firestorePlants, ...migratedLocalPlants]);
+          setPlants([...optimizedFirestorePlants, ...migratedLocalPlants]);
         }
       } catch (e) {
         console.error('Failed to load plants', e);
@@ -163,6 +254,7 @@ export default function App() {
       } finally {
         if (isActive) {
           setIsLoading(false);
+          setPhotoOptimizationMessage('');
         }
       }
     };
@@ -349,6 +441,11 @@ if (e.key === 'Escape') {
             </div>
             <p className="font-serif italic text-[#A7C080]">Waking up the seedlings...</p>
           </div>
+          {photoOptimizationMessage && (
+            <div className="fixed bottom-6 left-1/2 z-[120] -translate-x-1/2 rounded-full bg-white/95 px-5 py-3 text-sm font-bold text-[#8FA66A] shadow-2xl dark:bg-[#232B26]/95 dark:text-[#A7C080]">
+              {photoOptimizationMessage}
+            </div>
+          )}
         </div>
       </div>
     );
@@ -586,6 +683,12 @@ if (e.key === 'Escape') {
             onClose={() => setIsEditModalOpen(false)}
             onSubmit={(updates) => updatePlant(selectedPlant.id, updates)}
           />
+        )}
+
+        {photoOptimizationMessage && (
+          <div className="fixed bottom-6 left-1/2 z-[120] -translate-x-1/2 rounded-full bg-white/95 px-5 py-3 text-sm font-bold text-[#8FA66A] shadow-2xl dark:bg-[#232B26]/95 dark:text-[#A7C080]">
+            {photoOptimizationMessage}
+          </div>
         )}
 
       </div>
@@ -1043,10 +1146,16 @@ function AddPlantModal({ onClose, onSubmit }) {
     return POPULAR_PLANTS.filter(p => p.toLowerCase().includes(species.toLowerCase())).slice(0, 5);
   }, [species]);
 
-  const handlePhoto = (e) => {
-    const reader = new FileReader();
-    reader.onload = () => setPhoto(reader.result);
-    if (e.target.files[0]) reader.readAsDataURL(e.target.files[0]);
+  const handlePhoto = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    try {
+      setPhoto(await compressImage(file));
+    } catch (error) {
+      console.error('Failed to compress plant photo', error);
+      window.alert('That photo could not be optimized. Choose another image and try again.');
+    }
   };
 
   return (
@@ -1134,10 +1243,16 @@ function EditPlantModal({ plant, onClose, onSubmit }) {
     return POPULAR_PLANTS.filter(p => p.toLowerCase().includes(species.toLowerCase())).slice(0, 5);
   }, [species]);
 
-  const handlePhoto = (e) => {
-    const reader = new FileReader();
-    reader.onload = () => setPhoto(reader.result);
-    if (e.target.files[0]) reader.readAsDataURL(e.target.files[0]);
+  const handlePhoto = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    try {
+      setPhoto(await compressImage(file));
+    } catch (error) {
+      console.error('Failed to compress plant photo', error);
+      window.alert('That photo could not be optimized. Choose another image and try again.');
+    }
   };
 
   return (
