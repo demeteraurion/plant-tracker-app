@@ -54,6 +54,24 @@ export const getAllPlantsFromIndexedDB = async () => {
   })
 }
 
+const deletePlantsFromIndexedDB = async (ids) => {
+  const idsToDelete = ids.filter(Boolean)
+  if (idsToDelete.length === 0) return true
+
+  const indexedDb = await initIndexedDB()
+
+  return new Promise((resolve, reject) => {
+    const transaction = indexedDb.transaction(STORE_NAME, 'readwrite')
+    const store = transaction.objectStore(STORE_NAME)
+
+    idsToDelete.forEach((id) => store.delete(id))
+
+    transaction.oncomplete = () => resolve(true)
+    transaction.onerror = () => reject(transaction.error)
+    transaction.onabort = () => reject(transaction.error)
+  })
+}
+
 export const getAllPlants = async () => {
   const snapshot = await getDocs(getPlantsCollection())
   return snapshot.docs.map((plantDoc) => plantDoc.data())
@@ -66,6 +84,12 @@ export const savePlantToDB = async (plant) => {
 
 export const deletePlantFromDB = async (id) => {
   await deleteDoc(getPlantDocument(id))
+  await deletePlantsFromIndexedDB([id])
+  return true
+}
+
+export const deleteLocalPlantsFromDB = async (ids) => {
+  await deletePlantsFromIndexedDB(ids)
   return true
 }
 

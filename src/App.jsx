@@ -1,6 +1,7 @@
 ﻿import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   deletePlantFromDB,
+  deleteLocalPlantsFromDB,
   getAllPlants,
   getAllPlantsFromIndexedDB,
   replacePlantsInDB,
@@ -239,6 +240,8 @@ export default function App() {
             (_, index) => migrationResults[index].status === 'fulfilled',
           );
 
+          await deleteLocalPlantsFromDB(migratedLocalPlants.map((plant) => plant.id));
+
           const migrationErrors = migrationResults
             .filter((result) => result.status === 'rejected')
             .map((result) => result.reason);
@@ -367,10 +370,21 @@ if (e.key === 'Escape') {
   };
 
   const deletePlant = async (id) => {
-    await deletePlantFromDB(id);
-    setPlants((current) => current.filter((p) => p.id !== id));
-    setSelectedPlantId(null);
-    setView('dashboard');
+    const plant = plants.find((p) => p.id === id);
+    const plantName = plant?.name || 'this plant';
+    const shouldDelete = window.confirm(`Delete ${plantName}? This cannot be undone.`);
+
+    if (!shouldDelete) return;
+
+    try {
+      await deletePlantFromDB(id);
+      setPlants((current) => current.filter((p) => p.id !== id));
+      setSelectedPlantId(null);
+      setView('dashboard');
+    } catch (error) {
+      console.error('Failed to delete plant', error);
+      window.alert('Root Record could not delete this plant. Please try again.');
+    }
   };
   const markWatered = (id) => {
     const now = new Date();
