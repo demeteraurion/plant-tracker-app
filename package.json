@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "check:build-output": "node scripts/check-build-output.js",
     "preview": "vite preview",
     "deploy": "npm run build && firebase deploy"
   },

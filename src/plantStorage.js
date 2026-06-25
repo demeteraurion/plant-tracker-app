@@ -141,6 +141,8 @@ export const deleteLocalPlantsFromDB = async (ids) => {
   return true
 }
 
+export const replaceLocalPlantsInDB = (plants) => replacePlantsInStore(plants, STORE_NAME)
+
 export const replacePlantsInDB = async (plants) => {
   const snapshot = await getDocs(getPlantsCollection())
   const batch = writeBatch(db)
@@ -149,6 +151,7 @@ export const replacePlantsInDB = async (plants) => {
   plants.forEach((plant) => batch.set(getPlantDocument(plant.id), plant))
 
   await batch.commit()
+  await replaceLocalPlantsInDB([])
   await replaceIndexedDBCache(plants)
   return true
 }

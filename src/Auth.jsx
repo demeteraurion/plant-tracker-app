@@ -8,9 +8,11 @@ import { Sprout } from 'lucide-react'
 import { auth } from './firebase'
 
 const EMAIL_STORAGE_KEY = 'emailForSignIn'
+const AUTH_REDIRECT_URL =
+  import.meta.env.VITE_AUTH_REDIRECT_URL || 'https://plants.shayleesmith.com'
 
 const actionCodeSettings = {
-  url: 'https://plants.shayleesmith.com',
+  url: AUTH_REDIRECT_URL,
   handleCodeInApp: true,
 }
 

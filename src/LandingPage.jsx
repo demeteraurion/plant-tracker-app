@@ -1,3 +1,4 @@
+import { createElement } from 'react'
 import {
   ArrowRight,
   Camera,
@@ -162,13 +163,13 @@ export default function LandingPage() {
           </div>
 
           <div className="grid gap-4 md:grid-cols-3">
-            {features.map(({ icon: Icon, title, copy }) => (
+            {features.map(({ icon, title, copy }) => (
               <article
                 key={title}
                 className="rounded-[30px] border-2 border-white bg-white/78 p-6 shadow-[0_18px_55px_rgba(92,77,66,0.08)]"
               >
                 <span className="flex h-12 w-12 items-center justify-center rounded-[20px] bg-[#EAF2ED] text-[#8FA66A]">
-                  <Icon size={24} strokeWidth={2.6} />
+                  {createElement(icon, { size: 24, strokeWidth: 2.6 })}
                 </span>
                 <h3 className="mt-5 font-serif text-xl font-black text-[#5C4D42]">
                   {title}

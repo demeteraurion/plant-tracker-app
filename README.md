@@ -11,6 +11,10 @@ npm install
 npm run dev
 ```
 
+Set `VITE_AUTH_REDIRECT_URL` to the public URL that Firebase email-link sign-in should return to. The default is `https://plants.shayleesmith.com`.
+
+After `npm run build`, run `npm run check:build-output` to confirm the built asset paths stay relative and JavaScript chunks stay under 500 KiB.
+
 ## Deployment
 
 The normal GitHub Actions deploy flow in `.github/workflows/deploy.yml` does two things on pushes to `main`:
@@ -19,6 +23,8 @@ The normal GitHub Actions deploy flow in `.github/workflows/deploy.yml` does two
 - deploys `firestore.rules` to the Firebase project `plant-tracker-app-fdf90`
 
 The Firestore rules job uses the GitHub secret `FIREBASE_SERVICE_ACCOUNT_PLANT_TRACKER_APP_FDF90`. That secret should contain a Firebase or Google Cloud service account JSON key with permission to deploy Firestore rules for `plant-tracker-app-fdf90`.
+
+If the production app URL changes, set the GitHub Actions variable `VITE_AUTH_REDIRECT_URL` to the same authorized domain configured in Firebase Auth.
 
 Manual local deployment is still available with:
 
