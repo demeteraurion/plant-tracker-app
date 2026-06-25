@@ -4,6 +4,8 @@ import {
   deleteLocalPlantsFromDB,
   getAllPlants,
   getAllPlantsFromIndexedDB,
+  getCachedPlantsFromIndexedDB,
+  replaceIndexedDBCache,
   replacePlantsInDB,
   savePlantToDB,
 } from './plantStorage';
@@ -169,6 +171,7 @@ export default function App() {
   const [user, setUser] = useState(null);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -199,8 +202,11 @@ export default function App() {
 
     const loadPlants = async () => {
       setIsLoading(true);
+      setLoadError('');
+      let indexedDbPlants = [];
+
       try {
-        const indexedDbPlants = await getAllPlantsFromIndexedDB();
+        indexedDbPlants = await getAllPlantsFromIndexedDB();
         const firestorePlants = await getAllPlants();
         const firestorePlantIds = new Set(firestorePlants.map((plant) => plant.id));
         const localPlantsToMigrate = indexedDbPlants.filter(
@@ -253,11 +259,26 @@ export default function App() {
         }
 
         if (isActive) {
-          setPlants([...optimizedFirestorePlants, ...migratedLocalPlants]);
+          const loadedPlants = [...optimizedFirestorePlants, ...migratedLocalPlants];
+          await replaceIndexedDBCache(loadedPlants);
+          setPlants(loadedPlants);
         }
       } catch (e) {
         console.error('Failed to load plants', e);
-        window.alert('Root Record could not load or migrate your synced plants. Check your Firebase Firestore rules and try again.');
+        const cachedPlants = await getCachedPlantsFromIndexedDB().catch((cacheError) => {
+          console.error('Failed to load cached plants', cacheError);
+          return indexedDbPlants;
+        });
+        const fallbackPlants = cachedPlants.length > 0 ? cachedPlants : indexedDbPlants;
+
+        if (isActive) {
+          setPlants(fallbackPlants);
+          setLoadError(
+            fallbackPlants.length > 0
+              ? 'Could not reach Firebase, so Root Record is showing the latest saved local copy.'
+              : 'Could not reach Firebase, and there is no saved local copy on this device yet.'
+          );
+        }
       } finally {
         if (isActive) {
           setIsLoading(false);
@@ -500,6 +521,11 @@ if (e.key === 'Escape') {
   return (
     <div className={`${isDarkMode ? 'dark' : ''}`}>
       <div className="flex min-h-screen w-full overflow-x-hidden bg-[#FFF9F2] dark:bg-[#151A17] text-[#5C4D42] dark:text-[#CBD5D0] font-sans transition-colors duration-700 selection:bg-[#F2C6C2] selection:text-white">
+        {loadError && (
+          <div className="fixed left-1/2 top-4 z-[130] w-[calc(100%-2rem)] max-w-2xl -translate-x-1/2 rounded-[24px] border border-[#F2C6C2]/70 bg-white/95 px-5 py-4 text-center text-sm font-bold text-[#D98E82] shadow-2xl dark:border-[#B17F7A]/40 dark:bg-[#232B26]/95 dark:text-[#F2C6C2]">
+            {loadError}
+          </div>
+        )}
 
         {/* Mobile sidebar backdrop (tap to close) */}
         {isSidebarOpen && (

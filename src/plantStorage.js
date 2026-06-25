@@ -9,8 +9,9 @@ import {
 import { auth, db } from './firebase'
 
 const DB_NAME = 'PlantTrackerDB_CuteCozy'
-const DB_VERSION = 1
+const DB_VERSION = 2
 const STORE_NAME = 'plants'
+const CACHE_STORE_NAME = 'plantCache'
 
 const getCurrentUserId = () => {
   const uid = auth.currentUser?.uid
@@ -34,6 +35,9 @@ const initIndexedDB = () => {
       if (!indexedDb.objectStoreNames.contains(STORE_NAME)) {
         indexedDb.createObjectStore(STORE_NAME, { keyPath: 'id' })
       }
+      if (!indexedDb.objectStoreNames.contains(CACHE_STORE_NAME)) {
+        indexedDb.createObjectStore(CACHE_STORE_NAME, { keyPath: 'id' })
+      }
     }
 
     request.onsuccess = () => resolve(request.result)
@@ -41,12 +45,12 @@ const initIndexedDB = () => {
   })
 }
 
-export const getAllPlantsFromIndexedDB = async () => {
+const getAllPlantsFromStore = async (storeName) => {
   const indexedDb = await initIndexedDB()
 
   return new Promise((resolve, reject) => {
-    const transaction = indexedDb.transaction(STORE_NAME, 'readonly')
-    const store = transaction.objectStore(STORE_NAME)
+    const transaction = indexedDb.transaction(storeName, 'readonly')
+    const store = transaction.objectStore(storeName)
     const request = store.getAll()
 
     request.onsuccess = () => resolve(request.result)
@@ -54,15 +58,55 @@ export const getAllPlantsFromIndexedDB = async () => {
   })
 }
 
-const deletePlantsFromIndexedDB = async (ids) => {
+const savePlantsToStore = async (plants, storeName) => {
+  const plantsToSave = plants.filter((plant) => plant?.id)
+  if (plantsToSave.length === 0) return true
+
+  const indexedDb = await initIndexedDB()
+
+  return new Promise((resolve, reject) => {
+    const transaction = indexedDb.transaction(storeName, 'readwrite')
+    const store = transaction.objectStore(storeName)
+
+    plantsToSave.forEach((plant) => store.put(plant))
+
+    transaction.oncomplete = () => resolve(true)
+    transaction.onerror = () => reject(transaction.error)
+    transaction.onabort = () => reject(transaction.error)
+  })
+}
+
+const replacePlantsInStore = async (plants, storeName) => {
+  const plantsToSave = plants.filter((plant) => plant?.id)
+  const indexedDb = await initIndexedDB()
+
+  return new Promise((resolve, reject) => {
+    const transaction = indexedDb.transaction(storeName, 'readwrite')
+    const store = transaction.objectStore(storeName)
+
+    store.clear()
+    plantsToSave.forEach((plant) => store.put(plant))
+
+    transaction.oncomplete = () => resolve(true)
+    transaction.onerror = () => reject(transaction.error)
+    transaction.onabort = () => reject(transaction.error)
+  })
+}
+
+export const getAllPlantsFromIndexedDB = () => getAllPlantsFromStore(STORE_NAME)
+export const getCachedPlantsFromIndexedDB = () => getAllPlantsFromStore(CACHE_STORE_NAME)
+export const savePlantsToIndexedDBCache = (plants) => savePlantsToStore(plants, CACHE_STORE_NAME)
+export const replaceIndexedDBCache = (plants) => replacePlantsInStore(plants, CACHE_STORE_NAME)
+
+const deletePlantsFromIndexedDB = async (ids, storeName = STORE_NAME) => {
   const idsToDelete = ids.filter(Boolean)
   if (idsToDelete.length === 0) return true
 
   const indexedDb = await initIndexedDB()
 
   return new Promise((resolve, reject) => {
-    const transaction = indexedDb.transaction(STORE_NAME, 'readwrite')
-    const store = transaction.objectStore(STORE_NAME)
+    const transaction = indexedDb.transaction(storeName, 'readwrite')
+    const store = transaction.objectStore(storeName)
 
     idsToDelete.forEach((id) => store.delete(id))
 
@@ -74,17 +118,21 @@ const deletePlantsFromIndexedDB = async (ids) => {
 
 export const getAllPlants = async () => {
   const snapshot = await getDocs(getPlantsCollection())
-  return snapshot.docs.map((plantDoc) => plantDoc.data())
+  const plants = snapshot.docs.map((plantDoc) => plantDoc.data())
+  await replaceIndexedDBCache(plants)
+  return plants
 }
 
 export const savePlantToDB = async (plant) => {
   await setDoc(getPlantDocument(plant.id), plant)
+  await savePlantsToIndexedDBCache([plant])
   return true
 }
 
 export const deletePlantFromDB = async (id) => {
   await deleteDoc(getPlantDocument(id))
   await deletePlantsFromIndexedDB([id])
+  await deletePlantsFromIndexedDB([id], CACHE_STORE_NAME)
   return true
 }
 
@@ -101,5 +149,6 @@ export const replacePlantsInDB = async (plants) => {
   plants.forEach((plant) => batch.set(getPlantDocument(plant.id), plant))
 
   await batch.commit()
+  await replaceIndexedDBCache(plants)
   return true
 }
