@@ -1,16 +1,27 @@
-# React + Vite
+# My Garden App
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+React and Vite garden tracker backed by Firebase Auth and Firestore.
 
-Currently, two official plugins are available:
+## Local Development
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+Copy `.env.example` to `.env.local`, fill in the Firebase web app values, then run:
 
-## React Compiler
+```sh
+npm install
+npm run dev
+```
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Deployment
 
-## Expanding the ESLint configuration
+The normal GitHub Actions deploy flow in `.github/workflows/deploy.yml` does two things on pushes to `main`:
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+- builds the Vite app and deploys `dist` to GitHub Pages
+- deploys `firestore.rules` to the Firebase project `plant-tracker-app-fdf90`
+
+The Firestore rules job uses the GitHub secret `FIREBASE_SERVICE_ACCOUNT_PLANT_TRACKER_APP_FDF90`. That secret should contain a Firebase or Google Cloud service account JSON key with permission to deploy Firestore rules for `plant-tracker-app-fdf90`.
+
+Manual local deployment is still available with:
+
+```sh
+npm run deploy
+```
